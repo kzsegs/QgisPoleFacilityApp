@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+リソースファイル定義
+
+QGISプラグインで使用するアイコンやスタイルシートなどのリソースを定義。
+pyrcc5コマンドでresources.pyにコンパイルして使用する。
+
+コンパイル方法:
+    pyrcc5 resources.qrc -o resources.py
+
+使用方法:
+    from . import resources
+    QIcon(":/plugins/pole_facility/icon.png")
+-->
+<RCC>
+    <qresource prefix="/plugins/pole_facility">
+        <!-- メインアイコン -->
+        <file>icon.png</file>
+        
+        <!-- ツールバーアイコン -->
+        <file alias="icons/import.png">ui/resources/icons/import.png</file>
+        <file alias="icons/save.png">ui/resources/icons/save.png</file>
+        <file alias="icons/export.png">ui/resources/icons/export.png</file>
+        <file alias="icons/select.png">ui/resources/icons/select.png</file>
+        <file alias="icons/search.png">ui/resources/icons/search.png</file>
+        <file alias="icons/settings.png">ui/resources/icons/settings.png</file>
+        <file alias="icons/exit.png">ui/resources/icons/exit.png</file>
+        <file alias="icons/zoom_in.png">ui/resources/icons/zoom_in.png</file>
+        <file alias="icons/zoom_out.png">ui/resources/icons/zoom_out.png</file>
+        <file alias="icons/pan.png">ui/resources/icons/pan.png</file>
+        
+        <!-- スタイルシート -->
+        <file alias="styles/toolbar.qss">ui/resources/styles/toolbar.qss</file>
+        <file alias="styles/form.qss">ui/resources/styles/form.qss</file>
+    </qresource>
+</RCC>

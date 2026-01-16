@@ -1,0 +1,60 @@
+# このファイルには、プラグインに関するメタデータが含まれています。
+# QGIS 3.0以降では必須です。
+
+# 必須項目
+[general]
+name=Pole Facility Management
+qgisMinimumVersion=3.34
+description=電柱設備管理アプリケーション - CSV形式の設備データを地図上に表示し、属性情報や写真の表示・編集を行うシンプルなUIツール
+version=1.0.0
+author=kz segs
+email=kzsegs@gmail.com
+
+# 推奨項目
+about=QGISをベースとした電柱設備データの表示・編集アプリケーション。IT知識が乏しいオペレータでも操作可能なシンプルなUIを提供します。CSV読み込み、地図表示、属性編集、写真管理、検索・フィルタ機能を備えています。
+
+# タグ（カンマ区切り、スペースなし）
+tags=utilities,facility,inspection,csv,photo
+
+# ホームページ
+homepage=
+tracker=
+repository=
+
+# カテゴリ（Raster, Vector, Database, Web等）
+category=Vector
+
+# アイコン
+icon=icon.png
+
+# 実験的プラグインフラグ（true/false）
+experimental=False
+
+# 非推奨フラグ（true/false）
+deprecated=False
+
+# Pythonバージョン
+plugin_dependencies=
+
+# 変更履歴
+changelog=1.0.0 - 初回リリース
+    - CSVインポート機能
+    - 地図表示機能
+    - 属性編集機能（QGIS標準フォーム使用）
+    - 写真表示・編集機能
+    - 検索・フィルタ機能
+    - カスタムUI（QGIS標準UI簡略化）
+    - アプリ終了機能（UI状態復元）
+    - 設定機能
+
+# サーバー設定（オプション）
+server=False
+
+# 外部依存関係（オプション）
+external_deps=
+
+# ライセンス
+license=
+
+# プラグインの説明ファイル（オプション）
+hasProcessingProvider=no

@@ -1,0 +1,75 @@
+/* 
+ * カスタムツールバー用スタイルシート
+ * 
+ * シンプルで見やすいUIを実現する
+ */
+
+/* ツールバー本体 */
+QToolBar {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #f0f0f0, stop:1 #e0e0e0);
+    border: 1px solid #c0c0c0;
+    border-radius: 3px;
+    padding: 5px;
+    spacing: 8px;
+}
+
+/* ツールバーボタン */
+QToolButton {
+    background-color: #ffffff;
+    border: 1px solid #b0b0b0;
+    border-radius: 4px;
+    padding: 6px 12px;
+    margin: 2px;
+    font-size: 12pt;
+    font-weight: normal;
+}
+
+/* ツールバーボタン：ホバー時 */
+QToolButton:hover {
+    background-color: #e8f4fd;
+    border: 1px solid #0078d4;
+}
+
+/* ツールバーボタン：押下時 */
+QToolButton:pressed {
+    background-color: #cce4f7;
+    border: 1px solid #005a9e;
+}
+
+/* ツールバーボタン：無効時 */
+QToolButton:disabled {
+    background-color: #f5f5f5;
+    color: #a0a0a0;
+    border: 1px solid #d0d0d0;
+}
+
+/* ツールバーセパレータ */
+QToolBar::separator {
+    background: #c0c0c0;
+    width: 1px;
+    margin: 4px 8px;
+}
+
+/* 終了ボタン（特別スタイル） */
+QToolButton[text*="終了"] {
+    background-color: #fff0f0;
+    border: 1px solid #d08080;
+    color: #d00000;
+}
+
+QToolButton[text*="終了"]:hover {
+    background-color: #ffe0e0;
+    border: 1px solid #c00000;
+}
+
+/* 保存ボタン（強調） */
+QToolButton[text*="保存"] {
+    background-color: #f0f8ff;
+    border: 1px solid #4080c0;
+}
+
+QToolButton[text*="保存"]:hover {
+    background-color: #e0f0ff;
+    border: 1px solid #3070b0;
+}

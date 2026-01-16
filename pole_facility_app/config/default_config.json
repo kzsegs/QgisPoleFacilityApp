@@ -1,0 +1,61 @@
+{
+  "_comment_encoding": "このファイルはUTF-8で保存されていますが、Windows環境でShift_JISエディタで編集する場合は、保存時にUTF-8を指定してください",
+  
+  "version": "1.0",
+  
+  "_comment_paths": "========== パス設定 ==========",
+  "paths": {
+    "_comment_photo_root": "写真ファイルのルートディレクトリ（絶対パス）",
+    "photo_root": "/Users/ksaegusa/Desktop/QGIS/data/photos/original",
+    
+    "_comment_export_path": "エクスポート先のデフォルトパス",
+    "export_path": "/Users/ksaegusa/Desktop/QGIS/data/photos/edited"
+  },
+  
+  "_comment_ui": "========== UI設定 ==========",
+  "ui": {
+    "window_geometry": {
+      "x": 100,
+      "y": 100,
+      "width": 1200,
+      "height": 800
+    },
+    "last_import_directory": "",
+    "last_export_directory": ""
+  },
+  
+  "_comment_constants": "========== 定数 ==========",
+  "constants": {
+    "_comment_max_photo_size_mb": "最大写真サイズ（MB）",
+    "max_photo_size_mb": 10,
+    
+    "_comment_max_records_per_csv": "CSV最大レコード数",
+    "max_records_per_csv": 1000,
+    
+    "_comment_thumbnail_size": "サムネイルサイズ（ピクセル）",
+    "thumbnail_size": 100,
+    
+    "_comment_auto_save_interval_minutes": "自動保存間隔（分、0=無効）",
+    "auto_save_interval_minutes": 0
+  },
+  
+  "_comment_inspection_status": "========== 検査状態の選択肢 ==========",
+  "inspection_status": {
+    "_comment_status_1": "検査状態1の選択肢",
+    "status_1": ["状態1A", "状態1B", "状態1C", "状態1D", "その他1"],
+    
+    "_comment_status_2": "検査状態2の選択肢",
+    "status_2": ["状態2A", "状態2B", "状態2C", "状態2D", "その他2"],
+    
+    "_comment_status_3": "検査状態3の選択肢",
+    "status_3": ["状態3A", "状態3B", "状態3C", "状態3D", "その他3"]
+  },
+  
+  "_comment_field_mapping": "========== フィールドマッピング ==========",
+  "field_mapping": {
+    "latitude": "緯度座標",
+    "longitude": "経度座標",
+    "facility_number": "設備番号",
+    "inspection_date": "検査日"
+  }
+}
