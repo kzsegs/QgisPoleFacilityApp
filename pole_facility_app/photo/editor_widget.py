@@ -696,37 +696,39 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
         編集済み写真の保存パスを生成
         
         パス形式:
-            edited/[収容区域コード]/[設備番号]_[写真番号]_edited_YYYYMMDD_HHMMSS.jpg
+            edited/[元フォルダ名]/[元ファイル名]
+        
+        例:
+            元の相対パス: 2700012345局前_1/images-1.jpeg
+            保存先相対パス: edited/2700012345局前_1/images-1.jpeg
         
         Returns:
             tuple: (相対パス, 実際のパス)
         
         Raises:
-            ValueError: 必須フィールドが取得できない場合
+            ValueError: 元画像パスが取得できない場合
+        
+        Note:
+            - ファイル名・フォルダ名は編集前と同じものを使用
+            - タイムスタンプは付与しない
+            - 上書き保存される
         """
         # 地物情報取得
         feature = self.formFeature()
         
-        area_code = feature["収容区域コード"]
-        facility_num = feature["設備番号"]
-        
-        if not area_code or not facility_num:
-            raise ValueError("収容区域コードまたは設備番号が取得できません")
-        
-        # フィールド名から写真番号を抽出
-        # "設備写真1URI_修正後" → "1"
+        # 修正前フィールド名を生成
         field_name = self.field().name()
-        match = re.search(r'(\d+)', field_name)
-        photo_index = match.group(1) if match else "1"
+        source_field_name = field_name.replace("修正後", "修正前")
         
-        # タイムスタンプ
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 修正前フィールドから相対パス取得
+        source_relative_path = feature[source_field_name]
         
-        # ファイル名
-        filename = f"{facility_num}_{photo_index}_edited_{timestamp}.jpg"
+        if not source_relative_path or str(source_relative_path).strip().upper() == 'NULL':
+            raise ValueError(f"元画像パスが取得できません（フィールド: {source_field_name}）")
         
-        # 相対パス
-        relative_path = f"edited/{area_code}/{filename}"
+        # 相対パス: edited/[元フォルダ名]/[元ファイル名]
+        # 例: "2700012345局前_1/images-1.jpeg" → "edited/2700012345局前_1/images-1.jpeg"
+        relative_path = f"edited/{source_relative_path}"
         
         # 実際のパス
         from pole_facility_app.config.manager import ConfigManager
@@ -739,6 +741,7 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
         actual_path = os.path.join(photo_root, relative_path)
         
         return relative_path, actual_path
+
     
     def _get_feature(self):
         """地物取得"""

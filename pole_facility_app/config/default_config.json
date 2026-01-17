@@ -5,11 +5,11 @@
   
   "_comment_paths": "========== パス設定 ==========",
   "paths": {
-    "_comment_photo_root": "写真ファイルのルートディレクトリ（絶対パス）",
-    "photo_root": "/Users/ksaegusa/Desktop/QGIS/data/photos/original",
+    "_comment_photo_root": "写真ファイルのルートディレクトリ（絶対パス） - original/ と edited/ の親ディレクトリ",
+    "photo_root": "/Users/ksaegusa/Desktop/QGIS/data/photos",
     
     "_comment_export_path": "エクスポート先のデフォルトパス",
-    "export_path": "/Users/ksaegusa/Desktop/QGIS/data/photos/edited"
+    "export_path": "/Users/ksaegusa/Desktop/QGIS/data"
   },
   
   "_comment_ui": "========== UI設定 ==========",
