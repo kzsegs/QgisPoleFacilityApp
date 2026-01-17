@@ -726,9 +726,17 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
         if not source_relative_path or str(source_relative_path).strip().upper() == 'NULL':
             raise ValueError(f"元画像パスが取得できません（フィールド: {source_field_name}）")
         
+        # original/ プレフィックスを除去
+        # 例: "original/2700012345局前_1/images-1.jpeg" → "2700012345局前_1/images-1.jpeg"
+        source_path_normalized = str(source_relative_path)
+        if source_path_normalized.startswith("original/"):
+            source_path_normalized = source_path_normalized[len("original/"):]
+        elif source_path_normalized.startswith("original\\"):
+            source_path_normalized = source_path_normalized[len("original\\"):]
+        
         # 相対パス: edited/[元フォルダ名]/[元ファイル名]
         # 例: "2700012345局前_1/images-1.jpeg" → "edited/2700012345局前_1/images-1.jpeg"
-        relative_path = f"edited/{source_relative_path}"
+        relative_path = f"edited/{source_path_normalized}"
         
         # 実際のパス
         from pole_facility_app.config.manager import ConfigManager
