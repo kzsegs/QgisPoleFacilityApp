@@ -506,17 +506,18 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
     
     def load_source_photo(self):
         """
-        元画像（修正前）を読み込む
+        元画像または編集済み画像を読み込む
         
         処理フロー:
-            1. 対応する修正前フィールドを特定
-            2. 修正前フィールドから相対パス取得
-            3. パス解決
-            4. 画像読み込み
-            5. QGraphicsScene に背景として追加
+            1. 修正後フィールド（自分自身）の値をチェック
+               - 値がある → 編集済み画像を表示
+               - 値がない → 修正前画像を表示
+            2. パス解決
+            3. 画像読み込み
+            4. QGraphicsScene に背景として追加
         
         Note:
-            既に編集済み画像がある場合は、それを読み込む
+            修正後カラムに値がある場合は編集済み画像を優先表示
         """
         try:
             feature = self._get_feature()
@@ -525,27 +526,43 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
                 self._update_status("地物未選択", "#999")
                 return
             
-            # 既に編集済み画像がある場合は、それを優先
-            edited_path = self.value()
+            # ★修正: 修正後フィールド（自分自身）から値を取得
+            field_name = self.field().name()
+            edited_path = feature[field_name]
             
-            if edited_path:
-                actual_path = self._resolve_photo_path(edited_path)
+            # 修正後フィールドに値がある場合は、編集済み画像を表示
+            if edited_path and str(edited_path).strip() and str(edited_path).strip().upper() != 'NULL':
+                QgsMessageLog.logMessage(
+                    f"PhotoEditor - 編集済み画像を読み込み: {edited_path}",
+                    "PoleFacility", Qgis.Info
+                )
+                
+                actual_path = self._resolve_photo_path(str(edited_path))
+                
                 if os.path.exists(actual_path):
                     pixmap = self._load_image_as_pixmap(actual_path)
                     if pixmap and not pixmap.isNull():
                         self._display_pixmap(pixmap, "編集済み")
+                        self.current_photo_path = actual_path
                         return
+                else:
+                    QgsMessageLog.logMessage(
+                        f"PhotoEditor - 編集済み画像が見つかりません: {actual_path}",
+                        "PoleFacility", Qgis.Warning
+                    )
             
-            # 修正前フィールド名を生成
-            field_name = self.field().name()
+            # 修正後フィールドに値がない場合は、修正前画像を表示
             source_field_name = field_name.replace("修正後", "修正前")
-            
-            # 修正前画像を読み込む
             source_path = feature[source_field_name]
             
             if not source_path:
                 self._update_status("元画像: 未設定", "#999")
                 return
+            
+            QgsMessageLog.logMessage(
+                f"PhotoEditor - 修正前画像を読み込み: {source_path}",
+                "PoleFacility", Qgis.Info
+            )
             
             actual_path = self._resolve_photo_path(str(source_path))
             
