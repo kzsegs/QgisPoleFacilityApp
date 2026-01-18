@@ -1,142 +1,84 @@
 """
-設定管理モジュール
+設定管理 - アプリケーション設定の読み書きと管理
 
-ConfigManagerはアプリケーション設定をSingletonパターンで管理する。
-JSONファイルによる永続化をサポート。
+シングルトンパターンで実装され、設定ファイル（default_config.json）の
+読み書き、バリデーション、インポート/エクスポート機能を提供する。
+
+使用例:
+    config = ConfigManager.get_instance()
+    photo_root = config.get_photo_root_path()
+    config.set("paths.photo_root", "/new/path")
+    config.save_config()
 """
 
-import os
 import json
+import os
 import threading
-from typing import Any, Optional
-from pathlib import Path
-
-try:
-    from qgis.core import Qgis, QgsMessageLog
-    QGIS_AVAILABLE = True
-except ImportError:
-    QGIS_AVAILABLE = False
-    # フォールバック用の簡易ロガー
-    class Qgis:
-        Info = 0
-        Warning = 1
-        Critical = 2
-    
-    class QgsMessageLog:
-        @staticmethod
-        def logMessage(message, tag, level):
-            print(f"[{tag}] {message}")
-
-
-class ConfigError(Exception):
-    """設定エラー"""
-    pass
+from typing import Any, Dict, Optional
+from qgis.core import QgsMessageLog, Qgis
 
 
 class ConfigManager:
     """
     アプリケーション設定を管理するシングルトンクラス。
-    JSONファイルによる永続化をサポート。
+    設定ファイルの読み書き、バリデーション、インポート/エクスポート機能を提供する。
     
     重要:
         - 直接インスタンス化は禁止（ConfigManager()は不可）
         - 必ずget_instance()を使用すること
-        - 複数回get_instance()を呼んでもエラーにならない
         - スレッドセーフ（ダブルチェックロッキング使用）
     
     Attributes:
         _instance: シングルトンインスタンス
         _lock: スレッドセーフ用クラスレベルロック
-        _config_path: 設定ファイルのパス
-        _settings: 設定値を格納する辞書
-        _default_settings: デフォルト設定値
-        _event_bus: イベントバス（オプション）
-    
-    Example:
-        config = ConfigManager.get_instance()
-        config.initialize("C:/Users/user/.pole_facility/config.json")
-        photo_root = config.get_photo_root_path()
-        config.set_photo_root_path("C:/Data/Photos")
-        config.save_config()
+        config: 設定データ（辞書）
+        schema: スキーマ定義（辞書）
+        CONFIG_FILE: 設定ファイル名
+        SCHEMA_FILE: スキーマファイル名
+        ENCODING: ファイルエンコーディング（Shift-JIS）
     """
     
     _instance: Optional['ConfigManager'] = None
-    _lock = threading.Lock()
+    _lock: threading.Lock = threading.Lock()
+    
+    CONFIG_FILE = "default_config.json"
+    SCHEMA_FILE = "config_schema.json"
+    ENCODING = "shift-jis"
     
     def __new__(cls):
         """
         インスタンス生成を制御する。
         
-        処理フロー:
-            1. _instance が None なら新規生成
-            2. ダブルチェックロッキングで排他制御
-            3. 初期化は _initialize() で1度だけ実行
-            4. 既存インスタンスがあればそれを返す
-        
         Returns:
             ConfigManager: シングルトンインスタンス
-        
-        Note:
-            直接呼び出さず、get_instance()を使用すること
         """
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:  # ダブルチェック
                     cls._instance = super().__new__(cls)
-                    cls._instance._initialize()  # 初期化（1度のみ）
+                    cls._instance._initialize()
         return cls._instance
     
     def __init__(self):
-        """
-        直接インスタンス化を防ぐため、何もしない。
-        
-        重要:
-            - __new__ で初期化済みのため、ここでは何もしない
-            - 初期化処理は _initialize() で実行
-            - __init__ に初期化チェックを入れてはいけない
-            
-        誤った実装例（やってはいけない）:
-            def __init__(self):
-                if hasattr(self, '_initialized'):
-                    raise RuntimeError("...")  # ← 毎回エラーになる
-        
-        正しい実装:
-            def __init__(self):
-                pass  # 何もしない
-        """
+        """直接インスタンス化を防ぐため、何もしない"""
         pass
     
     def _initialize(self):
-        """
-        内部初期化処理（__new__から1度だけ呼ばれる）
-        
-        処理内容:
-            - _config_path の初期化
-            - _settings の初期化
-            - _default_settings の初期化
-            - _event_bus の初期化
-            - _user_initialized フラグの初期化
-            - _initialized フラグの設定
-        
-        Note:
-            - 外部から直接呼び出してはいけない
-            - hasattr で _initialized チェックにより、重複実行を防ぐ
-            - _user_initialized は initialize() が呼ばれたかを示す別のフラグ
-        """
+        """内部初期化処理（__new__から1度だけ呼ばれる）"""
         if not hasattr(self, '_initialized'):
-            self._config_path: Optional[str] = None
-            self._settings: dict = {}
-            self._default_settings: dict = {}
-            self._event_bus = None
-            self._user_initialized = False  # initialize()が呼ばれたか
-            self._initialized = True  # _initialize()が呼ばれたか
+            self.config: Dict[str, Any] = {}
+            self.schema: Dict[str, Any] = {}
+            self._instance_lock: threading.Lock = threading.Lock()
+            self._initialized = True
             
-            if QGIS_AVAILABLE:
-                QgsMessageLog.logMessage(
-                    "ConfigManager初期化完了",
-                    "PoleFacility",
-                    Qgis.Info
-                )
+            # 設定ファイル読み込み
+            self.load_config()
+            
+            QgsMessageLog.logMessage(
+                "ConfigManager初期化完了",
+                "PoleFacility",
+                Qgis.Info
+            )
     
     @classmethod
     def get_instance(cls) -> 'ConfigManager':
@@ -145,399 +87,454 @@ class ConfigManager:
         
         Returns:
             ConfigManager: シングルトンインスタンス
-        
-        Thread Safety:
-            スレッドセーフ（ダブルチェックロッキング使用）
-        
-        実装詳細:
-            1. cls._instance が None の場合のみ cls() を呼ぶ
-            2. cls() は __new__ を呼び出す
-            3. __new__ 内で _initialize() が1度だけ実行される
-            4. 2回目以降は既存の _instance を返すだけ
-        
-        Example:
-            config = ConfigManager.get_instance()
-            # 何度呼んでも同じインスタンス、エラーなし
-            config2 = ConfigManager.get_instance()
-            assert config is config2
         """
         if cls._instance is None:
-            cls()  # __new__ が呼ばれる
+            cls()
         return cls._instance
     
     @classmethod
     def clear_instance(cls):
-        """
-        シングルトンインスタンスをクリアする。
-        
-        用途:
-            - プラグインのunload時
-            - テストの前後処理
-            - アプリケーション終了時
-        
-        Thread Safety:
-            スレッドセーフ（ロックを使用）
-        
-        Example:
-            # プラグイン終了時
-            def unload(self):
-                EventBus.clear_instance()
-                ConfigManager.clear_instance()
-            
-            # テスト用フィクスチャ
-            @pytest.fixture(autouse=True)
-            def reset_singletons():
-                ConfigManager.clear_instance()
-                yield
-                ConfigManager.clear_instance()
-        """
+        """シングルトンインスタンスをクリアする"""
         with cls._lock:
             if cls._instance is not None:
-                if QGIS_AVAILABLE:
-                    QgsMessageLog.logMessage(
-                        "ConfigManagerインスタンスをクリア",
-                        "PoleFacility",
-                        Qgis.Info
-                    )
+                QgsMessageLog.logMessage(
+                    "ConfigManagerインスタンスをクリア",
+                    "PoleFacility",
+                    Qgis.Info
+                )
             cls._instance = None
     
-    def initialize(self, config_path: Optional[str] = None, event_bus=None) -> None:
+    def load_config(self) -> None:
         """
-        ConfigManagerを初期化する（設定ファイルの読み込み）。
+        設定ファイルを読み込む（Shift-JIS対応）
         
-        Args:
-            config_path: 設定ファイルのパス（省略時はデフォルトパス使用）
-            event_bus: EventBusインスタンス（オプション）
+        処理:
+            1. default_config.json を Shift-JIS で読み込み
+            2. JSONパース
+            3. self.config に格納
         
-        Raises:
-            ConfigError: 設定ファイルの読み込みに失敗した場合
-        
-        Example:
-            config = ConfigManager.get_instance()
-            config.initialize("C:/Users/user/.pole_facility/config.json")
-        
-        Note:
-            - これは _initialize() とは別物
-            - _initialize() はインスタンス生成時の内部初期化
-            - initialize() は設定ファイルの読み込み
-            - 設定ファイルが存在しない場合、デフォルト設定で新規作成
-            - 既存ファイルのバージョンが古い場合、自動マイグレーション実行
+        エラーハンドリング:
+            - UnicodeDecodeError → UTF-8でリトライ
+            - JSONDecodeError → デフォルト値で起動
+            - FileNotFoundError → デフォルト値で起動
         """
-        if self._user_initialized:
-            return
+        config_path = self._get_config_path()
         
-        self._event_bus = event_bus
-        
-        # デフォルト設定を読み込み
-        self._default_settings = self._create_default_config()
-        
-        # 設定ファイルパスを決定
-        if config_path is None:
-            config_path = self._get_default_config_path()
-        
-        self._config_path = config_path
-        
-        # 設定ファイルの読み込み
-        if not self.load_config():
-            # 読み込み失敗時はデフォルト設定を使用
-            self._settings = self._default_settings.copy()
-            # デフォルト設定で保存
-            self.save_config()
-        
-        self._user_initialized = True
-        
-        if QGIS_AVAILABLE:
+        try:
+            with open(config_path, 'r', encoding=self.ENCODING) as f:
+                self.config = json.load(f)
+            
             QgsMessageLog.logMessage(
-                f"ConfigManager設定読み込み完了: {self._config_path}",
+                f"設定ファイルを読み込みました（Shift-JIS）: {config_path}",
                 "PoleFacility",
                 Qgis.Info
             )
-    
-    def load_config(self) -> bool:
-        """
-        設定ファイルを読み込む。
         
-        Returns:
-            bool: 読み込み成功時True
-        
-        Note:
-            - ファイルが存在しない場合はFalseを返す（エラーではない）
-            - JSON形式が不正な場合はエラーログを出力してFalseを返す
-        """
-        if not self._config_path or not os.path.exists(self._config_path):
-            return False
-        
-        try:
-            with open(self._config_path, 'r', encoding='utf-8') as f:
-                loaded_config = json.load(f)
+        except UnicodeDecodeError:
+            # フォールバック: UTF-8でリトライ
+            QgsMessageLog.logMessage(
+                "Shift-JIS読み込み失敗、UTF-8でリトライします",
+                "PoleFacility",
+                Qgis.Warning
+            )
             
-            # バリデーション
-            if not self._validate_config(loaded_config):
-                if QGIS_AVAILABLE:
-                    QgsMessageLog.logMessage(
-                        "Invalid config file, using defaults",
-                        "PoleFacility",
-                        Qgis.Warning
-                    )
-                return False
-            
-            # マイグレーション
-            self._settings = self._migrate_config(loaded_config)
-            
-            return True
-            
-        except json.JSONDecodeError as e:
-            if QGIS_AVAILABLE:
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    self.config = json.load(f)
+                
                 QgsMessageLog.logMessage(
-                    f"JSON decode error: {str(e)}",
+                    f"設定ファイルを読み込みました（UTF-8）: {config_path}",
                     "PoleFacility",
-                    Qgis.Critical
+                    Qgis.Info
                 )
-            return False
-        except Exception as e:
-            if QGIS_AVAILABLE:
+            except Exception as e:
                 QgsMessageLog.logMessage(
-                    f"Config load error: {str(e)}",
+                    f"UTF-8読み込みも失敗: {str(e)}、デフォルト値を使用します",
                     "PoleFacility",
-                    Qgis.Critical
+                    Qgis.Warning
                 )
-            return False
-    
-    def save_config(self) -> bool:
-        """
-        設定をファイルに保存する。
+                self.config = self._get_default_config()
         
-        Returns:
-            bool: 保存成功時True
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            QgsMessageLog.logMessage(
+                f"設定ファイル読み込みエラー: {str(e)}、デフォルト値を使用します",
+                "PoleFacility",
+                Qgis.Warning
+            )
+            self.config = self._get_default_config()
+    
+    def save_config(self) -> None:
+        """
+        設定ファイルを保存（Shift-JIS）
+        
+        処理:
+            1. self.config を JSON文字列に変換
+            2. default_config.json に Shift-JIS で保存
         
         Raises:
-            ConfigError: 保存に失敗した場合
+            IOError: ファイル書き込み失敗
         """
-        if not self._config_path:
-            raise ConfigError("Config path not set")
+        config_path = self._get_config_path()
         
         try:
-            # ディレクトリが存在しない場合は作成
-            config_dir = os.path.dirname(self._config_path)
-            if config_dir and not os.path.exists(config_dir):
-                os.makedirs(config_dir, exist_ok=True)
+            with open(config_path, 'w', encoding=self.ENCODING) as f:
+                json.dump(
+                    self.config,
+                    f,
+                    ensure_ascii=False,
+                    indent=2
+                )
             
-            # JSON形式で保存
-            with open(self._config_path, 'w', encoding='utf-8') as f:
-                json.dump(self._settings, f, ensure_ascii=False, indent=2)
-            
-            return True
-            
+            QgsMessageLog.logMessage(
+                f"設定ファイルを保存しました（Shift-JIS）: {config_path}",
+                "PoleFacility",
+                Qgis.Info
+            )
+        
         except Exception as e:
-            error_msg = f"Config save error: {str(e)}"
-            if QGIS_AVAILABLE:
-                QgsMessageLog.logMessage(error_msg, "PoleFacility", Qgis.Critical)
-            raise ConfigError(error_msg)
+            QgsMessageLog.logMessage(
+                f"設定ファイル保存エラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
+            raise
+    
+    def reload(self) -> None:
+        """設定ファイルを再読み込みする"""
+        self.load_config()
+        QgsMessageLog.logMessage(
+            "設定を再読み込みしました",
+            "PoleFacility",
+            Qgis.Info
+        )
+    
+    def import_config(self, filepath: str) -> None:
+        """
+        設定ファイルをインポート（Shift-JIS）
+        
+        Args:
+            filepath: インポート元ファイルパス
+        
+        処理:
+            1. Shift-JIS でJSON読み込み
+            2. スキーマバリデーション
+            3. self.config に反映
+            4. default_config.json に保存
+        
+        Raises:
+            ValueError: バリデーション失敗
+            IOError: ファイル読み込み失敗
+        """
+        try:
+            # Shift-JIS でJSON読み込み
+            with open(filepath, 'r', encoding=self.ENCODING) as f:
+                imported_config = json.load(f)
+            
+            # スキーマバリデーション
+            self._validate_config(imported_config)
+            
+            # 適用
+            self.config = imported_config
+            self.save_config()
+            
+            QgsMessageLog.logMessage(
+                f"設定をインポートしました: {filepath}",
+                "PoleFacility",
+                Qgis.Info
+            )
+        
+        except UnicodeDecodeError:
+            # UTF-8でリトライ
+            QgsMessageLog.logMessage(
+                "Shift-JIS読み込み失敗、UTF-8でリトライします",
+                "PoleFacility",
+                Qgis.Warning
+            )
+            
+            with open(filepath, 'r', encoding='utf-8') as f:
+                imported_config = json.load(f)
+            
+            self._validate_config(imported_config)
+            self.config = imported_config
+            self.save_config()
+        
+        except ValueError as e:
+            QgsMessageLog.logMessage(
+                f"設定のバリデーションエラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
+            raise
+        
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"設定インポートエラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
+            raise
+    
+    def export_config(self, filepath: str) -> None:
+        """
+        設定ファイルをエクスポート（Shift-JIS）
+        
+        Args:
+            filepath: エクスポート先ファイルパス
+        
+        Raises:
+            IOError: ファイル書き込み失敗
+        """
+        try:
+            with open(filepath, 'w', encoding=self.ENCODING) as f:
+                json.dump(
+                    self.config,
+                    f,
+                    ensure_ascii=False,
+                    indent=2
+                )
+            
+            QgsMessageLog.logMessage(
+                f"設定をエクスポートしました: {filepath}",
+                "PoleFacility",
+                Qgis.Info
+            )
+        
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"設定エクスポートエラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
+            raise
     
     def get(self, key: str, default: Any = None) -> Any:
         """
-        設定値を取得する。ドット記法でネストしたキーにアクセス可能。
+        設定値を取得する。
         
         Args:
-            key: 設定キー（例: "paths.photo_root", "constants.max_photo_size_mb"）
-            default: キーが存在しない場合のデフォルト値
+            key: 設定キー（ドット記法サポート、例: "paths.photo_root"）
+            default: デフォルト値
         
         Returns:
-            Any: 設定値、またはデフォルト値
-        
-        Example:
-            photo_root = config.get("paths.photo_root", "")
-            max_size = config.get("constants.max_photo_size_mb", 10)
+            設定値、存在しない場合はdefault
         """
         keys = key.split('.')
-        value = self._settings
+        value = self.config
         
-        try:
-            for k in keys:
+        for k in keys:
+            if isinstance(value, dict) and k in value:
                 value = value[k]
-            return value
-        except (KeyError, TypeError):
-            return default
+            else:
+                return default
+        
+        return value
     
     def set(self, key: str, value: Any) -> None:
         """
-        設定値を更新する。
+        設定値を設定する。
         
         Args:
-            key: 設定キー
+            key: 設定キー（ドット記法サポート）
             value: 設定値
-        
-        Raises:
-            ValueError: キーが空の場合
-        
-        Example:
-            config.set("paths.photo_root", "C:/Data/Photos")
-        
-        Note:
-            - 設定変更時、config.changedイベントが発行される
-            - 変更は即座に反映されるが、save_config()を呼ぶまで永続化されない
         """
-        if not key:
-            raise ValueError("Key cannot be empty")
-        
         keys = key.split('.')
-        settings = self._settings
+        config = self.config
         
-        # ネストした辞書を作成
         for k in keys[:-1]:
-            if k not in settings:
-                settings[k] = {}
-            settings = settings[k]
+            if k not in config:
+                config[k] = {}
+            config = config[k]
         
-        # 値を設定
-        old_value = settings.get(keys[-1])
-        settings[keys[-1]] = value
-        
-        # イベント発行
-        if self._event_bus and old_value != value:
-            try:
-                self._event_bus.emit("config.changed", {
-                    "key": key,
-                    "old_value": old_value,
-                    "new_value": value
-                })
-            except:
-                pass  # EventBusがない場合は無視
+        config[keys[-1]] = value
     
     def get_photo_root_path(self) -> str:
-        """
-        写真ルートパスを取得する。
-        
-        Returns:
-            str: 写真ルートパス（未設定の場合は空文字列）
-        
-        Example:
-            root = config.get_photo_root_path()
-            full_path = os.path.join(root, relative_path)
-        """
+        """写真ルートパスを取得する"""
         return self.get("paths.photo_root", "")
     
-    def set_photo_root_path(self, path: str) -> None:
-        """
-        写真ルートパスを設定する。
-        
-        Args:
-            path: 写真ルートパス
-        
-        Raises:
-            ValueError: パスが存在しないディレクトリの場合
-        
-        Example:
-            config.set_photo_root_path("C:/Data/Photos")
-        """
-        if path and not os.path.isdir(path):
-            raise ValueError(f"Directory does not exist: {path}")
-        
-        self.set("paths.photo_root", path)
-    
     def get_export_path(self) -> str:
-        """
-        エクスポート先パスを取得する。
-        
-        Returns:
-            str: エクスポート先パス（未設定の場合は空文字列）
-        """
+        """エクスポート先デフォルトパスを取得する"""
         return self.get("paths.export_path", "")
     
-    def set_export_path(self, path: str) -> None:
+    def get_inspection_status_choices(self, index: int) -> list:
         """
-        エクスポート先パスを設定する。
+        検査状態の選択肢を取得する。
         
         Args:
-            path: エクスポート先パス
-        
-        Raises:
-            ValueError: パスが存在しないディレクトリの場合
-        """
-        if path and not os.path.isdir(path):
-            raise ValueError(f"Directory does not exist: {path}")
-        
-        self.set("paths.export_path", path)
-    
-    def get_inspection_status_list(self, status_num: int) -> list[str]:
-        """
-        検査状態の選択肢リストを取得する。
-        
-        Args:
-            status_num: 検査状態番号（1, 2, or 3）
+            index: 検査状態のインデックス（1, 2, 3）
         
         Returns:
-            list[str]: 選択肢リスト
-        
-        Raises:
-            ValueError: status_numが1-3以外の場合
-        
-        Example:
-            status_list = config.get_inspection_status_list(1)
-            # ["状態1A", "状態1B", "状態1C", "状態1D", "その他1"]
+            選択肢のリスト
         """
-        if status_num not in [1, 2, 3]:
-            raise ValueError(f"status_num must be 1, 2, or 3, got: {status_num}")
-        
-        key = f"inspection_status.status_{status_num}"
-        return self.get(key, [])
+        return self.get(f"inspection_status.status_{index}", [])
     
-    def reset_to_defaults(self) -> None:
-        """
-        全設定をデフォルト値にリセットする。
-        
-        Example:
-            config.reset_to_defaults()
-            config.save_config()
-        """
-        self._settings = self._default_settings.copy()
-        
-        if self._event_bus:
-            try:
-                self._event_bus.emit("config.reset", {})
-            except:
-                pass
-    
-    def _get_default_config_path(self) -> str:
-        """
-        デフォルト設定ファイルパスを取得する。
-        
-        Returns:
-            str: デフォルトパス
-        
-        Note:
-            ユーザーホームディレクトリ/.pole_facility/config.json
-        """
-        home_dir = str(Path.home())
-        config_dir = os.path.join(home_dir, '.pole_facility')
-        return os.path.join(config_dir, 'config.json')
-    
-    def _create_default_config(self) -> dict:
-        """
-        デフォルト設定を作成する。
-        
-        Returns:
-            dict: デフォルト設定辞書
-        """
-        # default_config.jsonを読み込む
-        default_config_file = os.path.join(
+    def _get_config_path(self) -> str:
+        """設定ファイルのパスを取得する"""
+        return os.path.join(
             os.path.dirname(__file__),
-            'default_config.json'
+            self.CONFIG_FILE
         )
+    
+    def _get_schema_path(self) -> str:
+        """スキーマファイルのパスを取得する"""
+        return os.path.join(
+            os.path.dirname(__file__),
+            self.SCHEMA_FILE
+        )
+    
+    def _load_schema(self) -> Dict[str, Any]:
+        """
+        スキーマファイルを読み込む（UTF-8）
         
-        if os.path.exists(default_config_file):
-            try:
-                with open(default_config_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                if QGIS_AVAILABLE:
-                    QgsMessageLog.logMessage(
-                        f"Failed to load default_config.json: {str(e)}",
-                        "PoleFacility",
-                        Qgis.Warning
+        Returns:
+            スキーマ辞書
+        """
+        schema_path = self._get_schema_path()
+        
+        try:
+            with open(schema_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"スキーマファイル読み込みエラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Warning
+            )
+            return {}
+    
+    def _validate_config(self, config: dict) -> bool:
+        """
+        config_schema.json に基づいてバリデーション
+        
+        Args:
+            config: バリデーション対象の設定辞書
+        
+        Returns:
+            True: バリデーション成功
+        
+        Raises:
+            ValueError: バリデーション失敗（詳細メッセージ付き）
+        """
+        schema = self._load_schema()
+        
+        if not schema or 'sections' not in schema:
+            # スキーマがない場合は検証をスキップ
+            QgsMessageLog.logMessage(
+                "スキーマファイルが見つかりません。バリデーションをスキップします",
+                "PoleFacility",
+                Qgis.Warning
+            )
+            return True
+        
+        # セクションごとにバリデーション
+        for section_name, section_def in schema['sections'].items():
+            if section_name not in config:
+                raise ValueError(
+                    f"必須セクションが見つかりません: {section_name}"
+                )
+            
+            # フィールドごとにバリデーション
+            for field_name, field_def in section_def.get('fields', {}).items():
+                # 必須チェック
+                if field_def.get('required', False):
+                    if field_name not in config[section_name]:
+                        raise ValueError(
+                            f"必須フィールドが見つかりません: "
+                            f"{section_name}.{field_name}"
+                        )
+                
+                # 型・範囲チェック
+                if field_name in config[section_name]:
+                    value = config[section_name][field_name]
+                    self._validate_field_type(
+                        f"{section_name}.{field_name}",
+                        value,
+                        field_def
+                    )
+                    self._validate_field_range(
+                        f"{section_name}.{field_name}",
+                        value,
+                        field_def
                     )
         
-        # フォールバック: ハードコードされたデフォルト設定
+        return True
+    
+    def _validate_field_type(self, name: str, value: Any, field_def: dict) -> None:
+        """
+        フィールドの型をバリデーション
+        
+        Args:
+            name: フィールド名（表示用）
+            value: 検証する値
+            field_def: フィールド定義
+        
+        Raises:
+            ValueError: 型エラー
+        """
+        expected_type = field_def.get('type')
+        
+        if not expected_type:
+            return
+        
+        type_map = {
+            'string': str,
+            'integer': int,
+            'boolean': bool,
+            'list': list,
+            'directory': str,
+            'file': str,
+            'choice': str
+        }
+        
+        expected_python_type = type_map.get(expected_type)
+        
+        if expected_python_type and not isinstance(value, expected_python_type):
+            raise ValueError(
+                f"フィールド {name} の型が不正です。"
+                f"期待: {expected_type}, 実際: {type(value).__name__}"
+            )
+    
+    def _validate_field_range(self, name: str, value: Any, field_def: dict) -> None:
+        """
+        フィールドの範囲をバリデーション
+        
+        Args:
+            name: フィールド名（表示用）
+            value: 検証する値
+            field_def: フィールド定義
+        
+        Raises:
+            ValueError: 範囲エラー
+        """
+        # 数値範囲チェック
+        if 'min' in field_def and isinstance(value, (int, float)):
+            if value < field_def['min']:
+                raise ValueError(
+                    f"フィールド {name} の値が小さすぎます。"
+                    f"最小値: {field_def['min']}"
+                )
+        
+        if 'max' in field_def and isinstance(value, (int, float)):
+            if value > field_def['max']:
+                raise ValueError(
+                    f"フィールド {name} の値が大きすぎます。"
+                    f"最大値: {field_def['max']}"
+                )
+        
+        # 選択肢チェック
+        if 'choices' in field_def and isinstance(value, str):
+            if value not in field_def['choices']:
+                raise ValueError(
+                    f"フィールド {name} の値が選択肢にありません。"
+                    f"選択肢: {field_def['choices']}"
+                )
+    
+    def _get_default_config(self) -> Dict[str, Any]:
+        """
+        デフォルト設定を返す
+        
+        Returns:
+            デフォルト設定辞書
+        """
         return {
             "version": "1.0",
             "paths": {
@@ -570,62 +567,11 @@ class ConfigManager:
                 "longitude": "経度座標",
                 "facility_number": "設備番号",
                 "inspection_date": "検査日"
+            },
+            "debug": {
+                "enable_logging": True,
+                "log_level": "INFO",
+                "log_to_file": False,
+                "log_file_path": ""
             }
         }
-    
-    def _validate_config(self, config: dict) -> bool:
-        """
-        設定ファイルの内容を検証する。
-        
-        Args:
-            config: 検証する設定辞書
-        
-        Returns:
-            bool: 有効な場合True
-        """
-        # 必須キーのチェック
-        required_keys = ["version", "paths", "inspection_status"]
-        for key in required_keys:
-            if key not in config:
-                return False
-        
-        # バージョンチェック
-        if not isinstance(config.get("version"), str):
-            return False
-        
-        return True
-    
-    def _migrate_config(self, config: dict) -> dict:
-        """
-        古いバージョンの設定を最新版にマイグレーションする。
-        
-        Args:
-            config: マイグレーション対象の設定
-        
-        Returns:
-            dict: マイグレーション後の設定
-        """
-        version = config.get("version", "1.0")
-        
-        # 現在はバージョン1.0のみなのでマイグレーション不要
-        # 将来のバージョンアップ時にここに追加
-        
-        # デフォルト設定と統合（新しいキーを追加）
-        migrated = self._default_settings.copy()
-        self._deep_update(migrated, config)
-        
-        return migrated
-    
-    def _deep_update(self, target: dict, source: dict) -> None:
-        """
-        辞書を再帰的にマージする。
-        
-        Args:
-            target: マージ先の辞書（更新される）
-            source: マージ元の辞書
-        """
-        for key, value in source.items():
-            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
-                self._deep_update(target[key], value)
-            else:
-                target[key] = value

@@ -409,12 +409,19 @@ class CustomToolbarWidget(QToolBar):
     def _on_settings_clicked(self) -> None:
         """
         設定ボタンクリック時の処理。
+        設定ダイアログを表示する。
         """
         QgsMessageLog.logMessage(
             "設定ボタンクリック",
             "PoleFacility",
             Qgis.Info
         )
+        
+        # 設定ダイアログを表示
+        from pole_facility_app.config.dialog import SettingsDialogWidget
+        
+        dialog = SettingsDialogWidget(self)
+        dialog.exec_()
         
         # シグナル発行
         self.settings_clicked.emit()

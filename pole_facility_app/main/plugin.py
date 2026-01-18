@@ -208,7 +208,7 @@ class PoleFacilityMain:
             self.config_manager = ConfigManager.get_instance()
             
             # ConfigManager を初期化（設定ファイル読み込み）
-            self.config_manager.initialize(event_bus=self.event_bus)
+#            self.config_manager.initialize(event_bus=self.event_bus)
             
             # 写真ウィジェットを登録
             PhotoWidgetFactory.register_widgets()

@@ -1,0 +1,124 @@
+{
+  "version": "1.0",
+  "sections": {
+    "paths": {
+      "label": "パス設定",
+      "fields": {
+        "photo_root": {
+          "label": "写真ルートディレクトリ",
+          "type": "directory",
+          "required": true,
+          "description": "original/ と edited/ の親ディレクトリ",
+          "validation": "exists"
+        },
+        "export_path": {
+          "label": "エクスポート先デフォルトパス",
+          "type": "directory",
+          "required": true,
+          "description": "CSVエクスポート時のデフォルト保存先",
+          "validation": "exists"
+        }
+      }
+    },
+    "constants": {
+      "label": "定数設定",
+      "fields": {
+        "max_photo_size_mb": {
+          "label": "最大写真サイズ (MB)",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 100,
+          "default": 10,
+          "description": "許可する写真ファイルの最大サイズ"
+        },
+        "max_records_per_csv": {
+          "label": "CSV最大レコード数",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 10000,
+          "default": 1000,
+          "description": "CSVインポート時の最大レコード数"
+        },
+        "thumbnail_size": {
+          "label": "サムネイルサイズ (px)",
+          "type": "integer",
+          "required": true,
+          "min": 50,
+          "max": 500,
+          "default": 100,
+          "description": "写真サムネイルの表示サイズ"
+        },
+        "auto_save_interval_minutes": {
+          "label": "自動保存間隔 (分)",
+          "type": "integer",
+          "required": true,
+          "min": 0,
+          "max": 60,
+          "default": 0,
+          "description": "自動保存の間隔（0=無効）"
+        }
+      }
+    },
+    "inspection_status": {
+      "label": "検査状態選択肢",
+      "fields": {
+        "status_1": {
+          "label": "検査状態1",
+          "type": "list",
+          "item_type": "string",
+          "required": true,
+          "description": "コンボボックスの選択肢"
+        },
+        "status_2": {
+          "label": "検査状態2",
+          "type": "list",
+          "item_type": "string",
+          "required": true,
+          "description": "コンボボックスの選択肢"
+        },
+        "status_3": {
+          "label": "検査状態3",
+          "type": "list",
+          "item_type": "string",
+          "required": true,
+          "description": "コンボボックスの選択肢"
+        }
+      }
+    },
+    "debug": {
+      "label": "デバッグ設定",
+      "fields": {
+        "enable_logging": {
+          "label": "ログ出力を有効化",
+          "type": "boolean",
+          "required": true,
+          "default": true,
+          "description": "ログ出力の有効/無効を切り替え"
+        },
+        "log_level": {
+          "label": "ログレベル",
+          "type": "choice",
+          "choices": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+          "required": true,
+          "default": "INFO",
+          "description": "ログ出力レベル"
+        },
+        "log_to_file": {
+          "label": "ファイルに出力",
+          "type": "boolean",
+          "required": true,
+          "default": false,
+          "description": "ログをファイルに出力するか"
+        },
+        "log_file_path": {
+          "label": "ログファイルパス",
+          "type": "file",
+          "required": false,
+          "description": "ログファイルのパス（空の場合は標準出力のみ）"
+        }
+      }
+    }
+  }
+}

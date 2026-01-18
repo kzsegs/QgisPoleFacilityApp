@@ -1,440 +1,333 @@
 """
-設定画面UIモジュール
+設定ダイアログ - 設定画面のメインダイアログ
 
-SettingsDialogWidgetは設定画面のUIを提供する。
+3タブ構成で設定を管理:
+    - 基本設定タブ
+    - カラム設定タブ（Phase 2用）
+    - デバッグ設定タブ
+
+使用例:
+    dialog = SettingsDialogWidget(parent)
+    dialog.exec_()
 """
 
-import os
 from typing import Optional
+from datetime import datetime
+from PyQt5.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout,
+    QTabWidget, QPushButton, QMessageBox,
+    QFileDialog
+)
+from PyQt5.QtCore import Qt
+from qgis.core import QgsMessageLog, Qgis
 
-try:
-    from PyQt5.QtWidgets import (
-        QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-        QLineEdit, QPushButton, QFileDialog, QMessageBox,
-        QGroupBox, QLabel, QSpinBox, QTabWidget, QWidget
-    )
-    from PyQt5.QtCore import Qt, pyqtSignal
-    PYQT5_AVAILABLE = True
-except ImportError:
-    PYQT5_AVAILABLE = False
-    # テスト用フォールバック
-    class QDialog:
-        pass
-    class pyqtSignal:
-        def __init__(self, *args):
-            pass
-
-try:
-    from qgis.core import Qgis, QgsMessageLog
-    QGIS_AVAILABLE = True
-except ImportError:
-    QGIS_AVAILABLE = False
+from .tabs import BasicSettingsTab, ColumnSettingsTab, DebugSettingsTab
+from ..config.manager import ConfigManager
+from ..main.event_bus import EventBus, EventNames
 
 
-class SettingsDialogWidget(QDialog if PYQT5_AVAILABLE else object):
+class SettingsDialogWidget(QDialog):
     """
-    設定画面ダイアログ。
-    
-    Signals:
-        settings_saved: 設定が保存された時に発行
+    設定ダイアログ
     
     Attributes:
         config_manager: ConfigManagerインスタンス
-        photo_root_edit: 写真ルートパス入力フィールド
-        photo_root_browse_btn: 写真ルートパス参照ボタン
-        export_path_edit: エクスポートパス入力フィールド
-        export_path_browse_btn: エクスポートパス参照ボタン
-        save_btn: 保存ボタン
-        cancel_btn: キャンセルボタン
-    
-    Example:
-        dialog = SettingsDialogWidget(config_manager, parent)
-        if dialog.exec_():
-            # 設定が保存された
-            pass
+        schema: スキーマ定義辞書
+        current_config: 現在の設定辞書（作業用）
+        tab_widget: タブウィジェット
+        basic_settings_tab: 基本設定タブ
+        column_settings_tab: カラム設定タブ
+        debug_settings_tab: デバッグ設定タブ
     """
     
-    # シグナル定義
-    if PYQT5_AVAILABLE:
-        settings_saved = pyqtSignal()
-    
-    def __init__(self, config_manager, parent=None):
+    def __init__(self, parent=None):
         """
         コンストラクタ
         
         Args:
-            config_manager: ConfigManagerインスタンス
             parent: 親ウィジェット
         """
-        if not PYQT5_AVAILABLE:
-            return
-        
         super().__init__(parent)
-        self.config_manager = config_manager
+        
+        self.config_manager = ConfigManager.get_instance()
+        self.schema = self.config_manager._load_schema()
+        self.current_config = {}
+        
         self.setWindowTitle("設定")
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(400)
+        self.setModal(True)
+        self.resize(700, 600)
         
-        self._setup_ui()
-        self.load_settings()
+        self._create_ui()
+        self._load_current_config()
+        
+        QgsMessageLog.logMessage(
+            "SettingsDialogWidget初期化完了",
+            "PoleFacility",
+            Qgis.Info
+        )
     
-    def _setup_ui(self):
-        """UIを構築する"""
-        if not PYQT5_AVAILABLE:
-            return
-        
+    def _create_ui(self) -> None:
+        """UI構築"""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
         
         # タブウィジェット
-        tab_widget = QTabWidget()
-        
-        # パス設定タブ
-        path_tab = self._create_path_tab()
-        tab_widget.addTab(path_tab, "パス設定")
-        
-        # 定数設定タブ
-        constants_tab = self._create_constants_tab()
-        tab_widget.addTab(constants_tab, "詳細設定")
-        
-        layout.addWidget(tab_widget)
+        self.tab_widget = QTabWidget(self)
+        self._create_tabs()
+        layout.addWidget(self.tab_widget)
         
         # ボタン
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        self.save_btn = QPushButton("保存")
-        self.save_btn.clicked.connect(self._on_save_clicked)
-        button_layout.addWidget(self.save_btn)
-        
-        self.cancel_btn = QPushButton("キャンセル")
-        self.cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(self.cancel_btn)
-        
+        button_layout = self._create_buttons()
         layout.addLayout(button_layout)
     
-    def _create_path_tab(self) -> 'QWidget':
-        """
-        パス設定タブを作成する
-        
-        Returns:
-            QWidget: パス設定タブウィジェット
-        """
-        if not PYQT5_AVAILABLE:
-            return None
-        
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        # 写真ルートパス
-        photo_group = QGroupBox("写真設定")
-        photo_layout = QFormLayout()
-        
-        photo_path_layout = QHBoxLayout()
-        self.photo_root_edit = QLineEdit()
-        self.photo_root_edit.setPlaceholderText("写真ファイルのルートディレクトリを指定")
-        photo_path_layout.addWidget(self.photo_root_edit)
-        
-        self.photo_root_browse_btn = QPushButton("参照...")
-        self.photo_root_browse_btn.clicked.connect(self._on_photo_browse_clicked)
-        photo_path_layout.addWidget(self.photo_root_browse_btn)
-        
-        photo_layout.addRow("写真ルートパス:", photo_path_layout)
-        
-        photo_info = QLabel(
-            "※ CSVファイルの写真URIフィールドは、このルートパスからの相対パスとして解決されます。\n"
-            "例: ルートパス「C:/Data/Photos」+ 写真URI「original/A001/P001_1.jpg」\n"
-            "　→ 実際のパス「C:/Data/Photos/original/A001/P001_1.jpg」"
+    def _create_tabs(self) -> None:
+        """タブ作成"""
+        # 基本設定タブ
+        self.basic_settings_tab = BasicSettingsTab(
+            self.schema,
+            self.current_config,
+            self
         )
-        photo_info.setWordWrap(True)
-        photo_info.setStyleSheet("color: gray; font-size: 10px;")
-        photo_layout.addRow("", photo_info)
+        self.tab_widget.addTab(self.basic_settings_tab, "基本設定")
         
-        photo_group.setLayout(photo_layout)
-        layout.addWidget(photo_group)
+        # カラム設定タブ（枠のみ）
+        self.column_settings_tab = ColumnSettingsTab(self)
+        self.tab_widget.addTab(self.column_settings_tab, "カラム設定")
         
-        # エクスポートパス
-        export_group = QGroupBox("エクスポート設定")
-        export_layout = QFormLayout()
-        
-        export_path_layout = QHBoxLayout()
-        self.export_path_edit = QLineEdit()
-        self.export_path_edit.setPlaceholderText("CSVエクスポート先ディレクトリを指定")
-        export_path_layout.addWidget(self.export_path_edit)
-        
-        self.export_path_browse_btn = QPushButton("参照...")
-        self.export_path_browse_btn.clicked.connect(self._on_export_browse_clicked)
-        export_path_layout.addWidget(self.export_path_browse_btn)
-        
-        export_layout.addRow("エクスポート先:", export_path_layout)
-        
-        export_info = QLabel(
-            "※ エクスポート時のデフォルト保存先ディレクトリです。"
+        # デバッグ設定タブ
+        self.debug_settings_tab = DebugSettingsTab(
+            self.schema,
+            self.current_config,
+            self
         )
-        export_info.setStyleSheet("color: gray; font-size: 10px;")
-        export_layout.addRow("", export_info)
+        self.tab_widget.addTab(self.debug_settings_tab, "デバッグ設定")
+    
+    def _create_buttons(self) -> QHBoxLayout:
+        """ボタン作成"""
+        layout = QHBoxLayout()
         
-        export_group.setLayout(export_layout)
-        layout.addWidget(export_group)
+        # インポートボタン
+        import_btn = QPushButton("インポート")
+        import_btn.clicked.connect(self._on_import_clicked)
+        layout.addWidget(import_btn)
+        
+        # エクスポートボタン
+        export_btn = QPushButton("エクスポート")
+        export_btn.clicked.connect(self._on_export_clicked)
+        layout.addWidget(export_btn)
         
         layout.addStretch()
         
-        return tab
+        # OKボタン
+        ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(self._on_ok_clicked)
+        layout.addWidget(ok_btn)
+        
+        # キャンセルボタン
+        cancel_btn = QPushButton("キャンセル")
+        cancel_btn.clicked.connect(self._on_cancel_clicked)
+        layout.addWidget(cancel_btn)
+        
+        return layout
     
-    def _create_constants_tab(self) -> 'QWidget':
+    def _load_current_config(self) -> None:
+        """現在の設定をUIに反映"""
+        import copy
+        self.current_config = copy.deepcopy(self.config_manager.config)
+    
+    def _validate_all_tabs(self) -> bool:
         """
-        定数設定タブを作成する
+        全タブのバリデーション
         
         Returns:
-            QWidget: 定数設定タブウィジェット
+            True: 全タブ成功
+            False: いずれかのタブで失敗
         """
-        if not PYQT5_AVAILABLE:
-            return None
+        # 基本設定タブ
+        if not self.basic_settings_tab.validate():
+            self.tab_widget.setCurrentIndex(0)
+            return False
         
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        # カラム設定タブ（Phase 2実装時まで常にTrue）
+        if not self.column_settings_tab.validate():
+            self.tab_widget.setCurrentIndex(1)
+            return False
         
-        # 制限値設定
-        limits_group = QGroupBox("制限値")
-        limits_layout = QFormLayout()
+        # デバッグ設定タブ
+        if not self.debug_settings_tab.validate():
+            self.tab_widget.setCurrentIndex(2)
+            return False
         
-        self.max_photo_size_spin = QSpinBox()
-        self.max_photo_size_spin.setRange(1, 100)
-        self.max_photo_size_spin.setSuffix(" MB")
-        limits_layout.addRow("最大写真サイズ:", self.max_photo_size_spin)
-        
-        self.max_records_spin = QSpinBox()
-        self.max_records_spin.setRange(100, 10000)
-        self.max_records_spin.setSingleStep(100)
-        limits_layout.addRow("最大レコード数/CSV:", self.max_records_spin)
-        
-        limits_group.setLayout(limits_layout)
-        layout.addWidget(limits_group)
-        
-        # 表示設定
-        display_group = QGroupBox("表示設定")
-        display_layout = QFormLayout()
-        
-        self.thumbnail_size_spin = QSpinBox()
-        self.thumbnail_size_spin.setRange(50, 300)
-        self.thumbnail_size_spin.setSingleStep(10)
-        self.thumbnail_size_spin.setSuffix(" px")
-        display_layout.addRow("サムネイルサイズ:", self.thumbnail_size_spin)
-        
-        display_group.setLayout(display_layout)
-        layout.addWidget(display_group)
-        
-        # 情報表示
-        info_label = QLabel(
-            "※ これらの設定は上級ユーザー向けです。\n"
-            "※ 変更する場合は、動作への影響を理解した上で行ってください。"
-        )
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: orange; font-size: 10px; margin-top: 20px;")
-        layout.addWidget(info_label)
-        
-        layout.addStretch()
-        
-        return tab
+        return True
     
-    def load_settings(self) -> None:
+    def _on_ok_clicked(self) -> None:
         """
-        現在の設定値をUIに読み込む
+        OKボタンクリック時
         
-        Example:
-            dialog.load_settings()
+        処理フロー:
+            1. 全タブのバリデーション
+            2. 各タブから値取得
+            3. マージして設定保存
+            4. EventBus でイベント発行
+            5. ダイアログを閉じる
         """
-        if not PYQT5_AVAILABLE:
+        # バリデーション
+        if not self._validate_all_tabs():
             return
         
-        # パス設定
-        self.photo_root_edit.setText(self.config_manager.get_photo_root_path())
-        self.export_path_edit.setText(self.config_manager.get_export_path())
+        # 値取得
+        basic_values = self.basic_settings_tab.get_values()
+        column_values = self.column_settings_tab.get_values()
+        debug_values = self.debug_settings_tab.get_values()
         
-        # 定数設定
-        self.max_photo_size_spin.setValue(
-            self.config_manager.get("constants.max_photo_size_mb", 10)
-        )
-        self.max_records_spin.setValue(
-            self.config_manager.get("constants.max_records_per_csv", 1000)
-        )
-        self.thumbnail_size_spin.setValue(
-            self.config_manager.get("constants.thumbnail_size", 100)
-        )
-    
-    def save_settings(self) -> bool:
-        """
-        UIの値を設定として保存する
+        # マージ
+        merged_config = self.current_config.copy()
         
-        Returns:
-            bool: 保存成功時True
+        # 基本設定
+        merged_config['paths'] = basic_values['paths']
+        merged_config['constants'] = basic_values['constants']
+        merged_config['inspection_status'] = basic_values['inspection_status']
         
-        Example:
-            if dialog.save_settings():
-                print("設定を保存しました")
-        """
-        if not PYQT5_AVAILABLE:
-            return False
+        # カラム設定（Phase 2実装時まで空）
+        # merged_config['field_mapping'] = column_values.get('field_mapping', {})
         
-        # バリデーション
-        if not self._validate_paths():
-            return False
+        # デバッグ設定
+        merged_config['debug'] = debug_values['debug']
         
+        # 保存
         try:
-            # パス設定
-            photo_root = self.photo_root_edit.text().strip()
-            export_path = self.export_path_edit.text().strip()
-            
-            if photo_root:
-                self.config_manager.set_photo_root_path(photo_root)
-            else:
-                self.config_manager.set("paths.photo_root", "")
-            
-            if export_path:
-                self.config_manager.set_export_path(export_path)
-            else:
-                self.config_manager.set("paths.export_path", "")
-            
-            # 定数設定
-            self.config_manager.set(
-                "constants.max_photo_size_mb",
-                self.max_photo_size_spin.value()
-            )
-            self.config_manager.set(
-                "constants.max_records_per_csv",
-                self.max_records_spin.value()
-            )
-            self.config_manager.set(
-                "constants.thumbnail_size",
-                self.thumbnail_size_spin.value()
-            )
-            
-            # 設定ファイルに保存
+            self.config_manager.config = merged_config
             self.config_manager.save_config()
             
-            # シグナル発行
-            self.settings_saved.emit()
+            # イベント発行
+            EventBus.get_instance().emit(EventNames.CONFIG_CHANGED, {})
             
-            return True
-            
-        except ValueError as e:
-            QMessageBox.warning(
+            QMessageBox.information(
                 self,
-                "設定エラー",
-                f"設定の保存に失敗しました:\n{str(e)}"
+                "成功",
+                "設定を保存しました。"
             )
-            return False
+            
+            self.accept()
+        
         except Exception as e:
             QMessageBox.critical(
                 self,
                 "エラー",
-                f"予期しないエラーが発生しました:\n{str(e)}"
+                f"設定の保存に失敗しました:\n{str(e)}"
             )
-            if QGIS_AVAILABLE:
-                QgsMessageLog.logMessage(
-                    f"Settings save error: {str(e)}",
-                    "PoleFacility",
-                    Qgis.Critical
-                )
-            return False
+            
+            QgsMessageLog.logMessage(
+                f"設定保存エラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
     
-    def _on_photo_browse_clicked(self):
-        """写真ルートパス参照ボタンクリック時の処理"""
-        if not PYQT5_AVAILABLE:
-            return
+    def _on_cancel_clicked(self) -> None:
+        """キャンセルボタンクリック時"""
+        self.reject()
+    
+    def _on_import_clicked(self) -> None:
+        """
+        インポートボタンクリック時
         
-        current_path = self.photo_root_edit.text()
-        if not current_path or not os.path.exists(current_path):
-            current_path = os.path.expanduser("~")
-        
-        directory = QFileDialog.getExistingDirectory(
+        処理フロー:
+            1. ファイル選択ダイアログ
+            2. Shift-JIS でJSON読み込み
+            3. バリデーション
+            4. UIに反映
+        """
+        filepath, _ = QFileDialog.getOpenFileName(
             self,
-            "写真ルートディレクトリを選択",
-            current_path,
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+            "設定ファイルを選択",
+            "",
+            "JSON Files (*.json)"
         )
         
-        if directory:
-            self.photo_root_edit.setText(directory)
-    
-    def _on_export_browse_clicked(self):
-        """エクスポートパス参照ボタンクリック時の処理"""
-        if not PYQT5_AVAILABLE:
+        if not filepath:
             return
         
-        current_path = self.export_path_edit.text()
-        if not current_path or not os.path.exists(current_path):
-            current_path = os.path.expanduser("~")
-        
-        directory = QFileDialog.getExistingDirectory(
-            self,
-            "エクスポート先ディレクトリを選択",
-            current_path,
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
-        )
-        
-        if directory:
-            self.export_path_edit.setText(directory)
-    
-    def _validate_paths(self) -> bool:
-        """
-        パス設定の妥当性を検証する
-        
-        Returns:
-            bool: 検証成功時True
-        """
-        if not PYQT5_AVAILABLE:
-            return False
-        
-        photo_root = self.photo_root_edit.text().strip()
-        export_path = self.export_path_edit.text().strip()
-        
-        # 写真ルートパスの検証
-        if photo_root:
-            if not os.path.exists(photo_root):
-                QMessageBox.warning(
-                    self,
-                    "パスエラー",
-                    f"写真ルートパスが存在しません:\n{photo_root}"
-                )
-                return False
+        try:
+            self.config_manager.import_config(filepath)
+            self._load_current_config()
             
-            if not os.path.isdir(photo_root):
-                QMessageBox.warning(
-                    self,
-                    "パスエラー",
-                    f"写真ルートパスがディレクトリではありません:\n{photo_root}"
-                )
-                return False
-        
-        # エクスポートパスの検証
-        if export_path:
-            if not os.path.exists(export_path):
-                QMessageBox.warning(
-                    self,
-                    "パスエラー",
-                    f"エクスポート先パスが存在しません:\n{export_path}"
-                )
-                return False
+            # 各タブをリロード
+            self.basic_settings_tab._load_values()
+            self.debug_settings_tab._load_values()
             
-            if not os.path.isdir(export_path):
-                QMessageBox.warning(
-                    self,
-                    "パスエラー",
-                    f"エクスポート先パスがディレクトリではありません:\n{export_path}"
-                )
-                return False
-        
-        return True
-    
-    def _on_save_clicked(self):
-        """保存ボタンクリック時の処理"""
-        if not PYQT5_AVAILABLE:
-            return
-        
-        if self.save_settings():
             QMessageBox.information(
                 self,
-                "設定保存",
-                "設定を保存しました。"
+                "成功",
+                "設定をインポートしました。"
             )
-            self.accept()
+        
+        except ValueError as e:
+            QMessageBox.critical(
+                self,
+                "バリデーションエラー",
+                f"設定ファイルの内容が不正です:\n{str(e)}"
+            )
+            
+            QgsMessageLog.logMessage(
+                f"設定インポートバリデーションエラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
+        
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "エラー",
+                f"設定のインポートに失敗しました:\n{str(e)}"
+            )
+            
+            QgsMessageLog.logMessage(
+                f"設定インポートエラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
+    
+    def _on_export_clicked(self) -> None:
+        """
+        エクスポートボタンクリック時
+        
+        処理フロー:
+            1. ファイル保存ダイアログ
+            2. 現在の設定を Shift-JIS でJSON保存
+        """
+        # デフォルトファイル名
+        default_filename = f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "設定ファイルを保存",
+            default_filename,
+            "JSON Files (*.json)"
+        )
+        
+        if not filepath:
+            return
+        
+        try:
+            self.config_manager.export_config(filepath)
+            
+            QMessageBox.information(
+                self,
+                "成功",
+                f"設定をエクスポートしました:\n{filepath}"
+            )
+        
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "エラー",
+                f"設定のエクスポートに失敗しました:\n{str(e)}"
+            )
+            
+            QgsMessageLog.logMessage(
+                f"設定エクスポートエラー: {str(e)}",
+                "PoleFacility",
+                Qgis.Critical
+            )
