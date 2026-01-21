@@ -530,6 +530,11 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
             field_name = self.field().name()
             edited_path = feature[field_name]
             
+            QgsMessageLog.logMessage(
+                f"PhotoEditor - フィールド: {field_name}, 値: {edited_path}",
+                "PoleFacility", Qgis.Info
+            )
+            
             # 修正後フィールドに値がある場合は、編集済み画像を表示
             if edited_path and str(edited_path).strip() and str(edited_path).strip().upper() != 'NULL':
                 QgsMessageLog.logMessage(
@@ -538,6 +543,16 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
                 )
                 
                 actual_path = self._resolve_photo_path(str(edited_path))
+                
+                QgsMessageLog.logMessage(
+                    f"PhotoEditor - 編集済み画像の実際のパス: {actual_path}",
+                    "PoleFacility", Qgis.Info
+                )
+                
+                QgsMessageLog.logMessage(
+                    f"PhotoEditor - ファイル存在チェック: {os.path.exists(actual_path)}",
+                    "PoleFacility", Qgis.Info
+                )
                 
                 if os.path.exists(actual_path):
                     pixmap = self._load_image_as_pixmap(actual_path)
@@ -550,6 +565,11 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
                         f"PhotoEditor - 編集済み画像が見つかりません: {actual_path}",
                         "PoleFacility", Qgis.Warning
                     )
+            else:
+                QgsMessageLog.logMessage(
+                    f"PhotoEditor - 修正後フィールドに値なし、修正前画像を読み込みます",
+                    "PoleFacility", Qgis.Info
+                )
             
             # 修正後フィールドに値がない場合は、修正前画像を表示
             source_field_name = field_name.replace("修正後", "修正前")
@@ -654,6 +674,21 @@ class PhotoEditorWidget(QgsEditorWidgetWrapper):
             # 相対パスをフィールドに保存
             self.setValue(relative_path)
             self._saved_relative_path = relative_path
+            
+            # レイヤの変更を確定（重要！）
+            layer = self.layer()
+            feature = self.formFeature()
+            
+            # フィールドインデックスを取得（メソッド呼び出し）
+            field_idx = self.fieldIdx()
+            
+            # 地物の属性を更新
+            layer.changeAttributeValue(feature.id(), field_idx, relative_path)
+            
+            QgsMessageLog.logMessage(
+                f"PhotoEditor - フィールド更新: feature_id={feature.id()}, field_idx={field_idx}, value={relative_path}",
+                "PoleFacility", Qgis.Info
+            )
             
             # EventBus でイベント発行
             from pole_facility_app.main.event_bus import EventBus
