@@ -453,18 +453,16 @@ class PoleFacilityMain:
     def _on_settings_clicked(self):
         """
         設定ボタンクリック時の処理。
+        
+        Note:
+            toolbar.py の _on_settings_clicked() で
+            既に設定ダイアログを表示しているため、
+            ここでは何もしない
         """
         QgsMessageLog.logMessage(
-            "設定ボタンクリック",
+            "設定ボタンクリック（toolbar経由で設定画面表示済み）",
             "PoleFacility",
             Qgis.Info
-        )
-        
-        # 設定ダイアログを表示（Phase 2で実装）
-        QMessageBox.information(
-            self.iface.mainWindow(),
-            "設定",
-            "設定画面は今後実装予定です"
         )
 
     def _on_data_imported(self, data: dict):

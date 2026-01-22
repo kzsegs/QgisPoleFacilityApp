@@ -113,10 +113,10 @@
           "description": "ログをファイルに出力するか"
         },
         "log_file_path": {
-          "label": "ログファイルパス",
-          "type": "file",
+          "label": "ログ保存先ディレクトリ",
+          "type": "directory",
           "required": false,
-          "description": "ログファイルのパス（空の場合は標準出力のみ）"
+          "description": "ログファイルの保存先フォルダ（空の場合は標準出力のみ）。ファイル名は自動生成されます（pole_facility_YYYYMMDD.log）"
         }
       }
     }

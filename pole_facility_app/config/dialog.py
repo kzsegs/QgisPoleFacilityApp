@@ -57,8 +57,9 @@ class SettingsDialogWidget(QDialog):
         self.setModal(True)
         self.resize(700, 600)
         
-        self._create_ui()
+        # 先に設定を読み込んでからUIを作成
         self._load_current_config()
+        self._create_ui()
         
         QgsMessageLog.logMessage(
             "SettingsDialogWidget初期化完了",
@@ -136,6 +137,12 @@ class SettingsDialogWidget(QDialog):
         """現在の設定をUIに反映"""
         import copy
         self.current_config = copy.deepcopy(self.config_manager.config)
+        
+        QgsMessageLog.logMessage(
+            f"設定を読み込みました: inspection_status={self.current_config.get('inspection_status', {})}",
+            "PoleFacility",
+            Qgis.Info
+        )
     
     def _validate_all_tabs(self) -> bool:
         """
@@ -162,20 +169,17 @@ class SettingsDialogWidget(QDialog):
         
         return True
     
-    def _on_ok_clicked(self) -> None:
+    def _save_current_values(self) -> bool:
         """
-        OKボタンクリック時
+        現在のUI値を保存する
         
-        処理フロー:
-            1. 全タブのバリデーション
-            2. 各タブから値取得
-            3. マージして設定保存
-            4. EventBus でイベント発行
-            5. ダイアログを閉じる
+        Returns:
+            True: 保存成功
+            False: バリデーション失敗
         """
         # バリデーション
         if not self._validate_all_tabs():
-            return
+            return False
         
         # 値取得
         basic_values = self.basic_settings_tab.get_values()
@@ -190,9 +194,6 @@ class SettingsDialogWidget(QDialog):
         merged_config['constants'] = basic_values['constants']
         merged_config['inspection_status'] = basic_values['inspection_status']
         
-        # カラム設定（Phase 2実装時まで空）
-        # merged_config['field_mapping'] = column_values.get('field_mapping', {})
-        
         # デバッグ設定
         merged_config['debug'] = debug_values['debug']
         
@@ -201,16 +202,13 @@ class SettingsDialogWidget(QDialog):
             self.config_manager.config = merged_config
             self.config_manager.save_config()
             
+            # current_configも更新
+            self.current_config = merged_config
+            
             # イベント発行
             EventBus.get_instance().emit(EventNames.CONFIG_CHANGED, {})
             
-            QMessageBox.information(
-                self,
-                "成功",
-                "設定を保存しました。"
-            )
-            
-            self.accept()
+            return True
         
         except Exception as e:
             QMessageBox.critical(
@@ -224,6 +222,26 @@ class SettingsDialogWidget(QDialog):
                 "PoleFacility",
                 Qgis.Critical
             )
+            return False
+    
+    def _on_ok_clicked(self) -> None:
+        """
+        OKボタンクリック時
+        
+        処理フロー:
+            1. 全タブのバリデーション
+            2. 各タブから値取得
+            3. マージして設定保存
+            4. EventBus でイベント発行
+            5. ダイアログを閉じる
+        """
+        if self._save_current_values():
+            QMessageBox.information(
+                self,
+                "成功",
+                "設定を保存しました。"
+            )
+            self.accept()
     
     def _on_cancel_clicked(self) -> None:
         """キャンセルボタンクリック時"""
@@ -234,11 +252,52 @@ class SettingsDialogWidget(QDialog):
         インポートボタンクリック時
         
         処理フロー:
-            1. ファイル選択ダイアログ
-            2. Shift-JIS でJSON読み込み
-            3. バリデーション
-            4. UIに反映
+            1. 現在の設定をエクスポートするか確認
+            2. ファイル選択ダイアログ
+            3. Shift-JIS でJSON読み込み
+            4. バリデーション
+            5. UIに反映
         """
+        # 現在の設定をエクスポートするか確認
+        reply = QMessageBox.question(
+            self,
+            "確認",
+            "インポートする前に、現在の設定をエクスポートしますか？",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes
+        )
+        
+        if reply == QMessageBox.Cancel:
+            return
+        
+        if reply == QMessageBox.Yes:
+            # 現在の設定をエクスポート
+            default_filename = f"config_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            filepath, _ = QFileDialog.getSaveFileName(
+                self,
+                "現在の設定をエクスポート",
+                default_filename,
+                "JSON Files (*.json)"
+            )
+            
+            if filepath:
+                try:
+                    self.config_manager.export_config(filepath)
+                    QMessageBox.information(
+                        self,
+                        "成功",
+                        f"現在の設定をエクスポートしました:\n{filepath}"
+                    )
+                except Exception as e:
+                    QMessageBox.critical(
+                        self,
+                        "エラー",
+                        f"エクスポートに失敗しました:\n{str(e)}"
+                    )
+                    return
+        
+        # インポート処理
         filepath, _ = QFileDialog.getOpenFileName(
             self,
             "設定ファイルを選択",
@@ -294,9 +353,28 @@ class SettingsDialogWidget(QDialog):
         エクスポートボタンクリック時
         
         処理フロー:
-            1. ファイル保存ダイアログ
-            2. 現在の設定を Shift-JIS でJSON保存
+            1. 現在の値を保存するか確認
+            2. ファイル保存ダイアログ
+            3. 現在の設定を Shift-JIS でJSON保存
         """
+        # 現在の値を保存するか確認
+        reply = QMessageBox.question(
+            self,
+            "確認",
+            "エクスポートする前に、現在の設定を保存しますか？",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes
+        )
+        
+        if reply == QMessageBox.Cancel:
+            return
+        
+        if reply == QMessageBox.Yes:
+            # 現在の値を保存
+            if not self._save_current_values():
+                # バリデーションエラー時は処理を中断
+                return
+        
         # デフォルトファイル名
         default_filename = f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         

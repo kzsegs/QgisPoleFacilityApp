@@ -15,7 +15,8 @@ from typing import Dict, Any, List
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLineEdit, QPushButton, QSpinBox,
-    QListWidget, QListWidgetItem, QFileDialog, QMessageBox
+    QListWidget, QListWidgetItem, QFileDialog, QMessageBox,
+    QLabel, QInputDialog
 )
 from PyQt5.QtCore import Qt
 from qgis.core import QgsMessageLog, Qgis
@@ -207,8 +208,6 @@ class BasicSettingsTab(QWidget):
         Returns:
             QVBoxLayout
         """
-        from PyQt5.QtWidgets import QLabel
-        
         layout = QVBoxLayout()
         
         # ラベル
@@ -316,8 +315,6 @@ class BasicSettingsTab(QWidget):
         Args:
             status_index: 検査状態インデックス
         """
-        from PyQt5.QtWidgets import QInputDialog
-        
         text, ok = QInputDialog.getText(
             self,
             "項目追加",

@@ -85,22 +85,27 @@ class DebugSettingsTab(QWidget):
         self.log_to_file_checkbox = QCheckBox("ファイルに出力")
         log_layout.addWidget(self.log_to_file_checkbox)
         
-        # ログファイルパス
-        log_file_label = QLabel("ログファイルパス:")
-        log_layout.addWidget(log_file_label)
+        # ログ保存先ディレクトリ
+        log_dir_label = QLabel("ログ保存先ディレクトリ:")
+        log_layout.addWidget(log_dir_label)
         
-        log_file_layout = QHBoxLayout()
+        log_dir_layout = QHBoxLayout()
         
         self.log_file_path_edit = QLineEdit()
-        self.log_file_path_edit.setPlaceholderText("(空の場合は標準出力のみ)")
-        log_file_layout.addWidget(self.log_file_path_edit)
+        self.log_file_path_edit.setPlaceholderText("(空の場合は標準出力のみ。ファイル名は自動生成されます)")
+        log_dir_layout.addWidget(self.log_file_path_edit)
         
-        log_file_browse_btn = QPushButton("参照...")
-        log_file_browse_btn.setMaximumWidth(80)
-        log_file_browse_btn.clicked.connect(self._on_browse_log_file_clicked)
-        log_file_layout.addWidget(log_file_browse_btn)
+        log_dir_browse_btn = QPushButton("参照...")
+        log_dir_browse_btn.setMaximumWidth(80)
+        log_dir_browse_btn.clicked.connect(self._on_browse_log_dir_clicked)
+        log_dir_layout.addWidget(log_dir_browse_btn)
         
-        log_layout.addLayout(log_file_layout)
+        log_layout.addLayout(log_dir_layout)
+        
+        # 補足説明
+        log_file_note = QLabel("※ ログファイル名: pole_facility_YYYYMMDD.log（日付自動付与）")
+        log_file_note.setStyleSheet("color: #666; font-size: 10px;")
+        log_layout.addWidget(log_file_note)
         
         layout.addWidget(log_group)
         
@@ -146,17 +151,17 @@ class DebugSettingsTab(QWidget):
             debug.get('log_file_path', '')
         )
     
-    def _on_browse_log_file_clicked(self) -> None:
-        """ログファイル参照ボタンクリック時"""
-        filepath, _ = QFileDialog.getSaveFileName(
+    def _on_browse_log_dir_clicked(self) -> None:
+        """ログ保存先ディレクトリ参照ボタンクリック時"""
+        directory = QFileDialog.getExistingDirectory(
             self,
-            "ログファイルを選択",
+            "ログ保存先ディレクトリを選択",
             "",
-            "Log Files (*.log);;All Files (*)"
+            QFileDialog.ShowDirsOnly
         )
         
-        if filepath:
-            self.log_file_path_edit.setText(filepath)
+        if directory:
+            self.log_file_path_edit.setText(directory)
     
     def get_values(self) -> dict:
         """
