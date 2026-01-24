@@ -573,5 +573,97 @@ class ConfigManager:
                 "log_level": "INFO",
                 "log_to_file": False,
                 "log_file_path": ""
+            },
+            "window_positions": {
+                "basic": {
+                    "screen": 0,
+                    "x": 100,
+                    "y": 100,
+                    "width": 400,
+                    "height": 300
+                },
+                "photo": {
+                    "screen": 0,
+                    "x": 520,
+                    "y": 100,
+                    "width": 600,
+                    "height": 500
+                },
+                "inspection": {
+                    "screen": 0,
+                    "x": 100,
+                    "y": 420,
+                    "width": 500,
+                    "height": 600
+                }
             }
         }
+    
+    # ==================== ウィンドウ位置管理 ====================
+    
+    def save_window_position(self, dialog_type: str, screen: int, x: int, y: int, width: int, height: int):
+        """
+        ウィンドウ位置・サイズをconfig.jsonに保存する。
+        
+        Args:
+            dialog_type: ダイアログタイプ ('basic', 'photo', 'inspection')
+            screen: スクリーン番号
+            x: X座標（絶対座標）
+            y: Y座標（絶対座標）
+            width: 幅
+            height: 高さ
+        
+        Note:
+            - 即座にconfig.jsonに書き込む
+            - マルチディスプレイ対応（スクリーン番号を保存）
+        """
+        if 'window_positions' not in self.config:
+            self.config['window_positions'] = {}
+        
+        self.config['window_positions'][dialog_type] = {
+            'screen': screen,
+            'x': x,
+            'y': y,
+            'width': width,
+            'height': height
+        }
+        
+        self.save_config()
+        
+        QgsMessageLog.logMessage(
+            f"ConfigManager - ウィンドウ位置保存: {dialog_type} screen={screen} x={x} y={y} w={width} h={height}",
+            "PoleFacility", Qgis.Info
+        )
+    
+    def get_window_position(self, dialog_type: str) -> Optional[Dict[str, int]]:
+        """
+        ウィンドウ位置・サイズをconfig.jsonから取得する。
+        
+        Args:
+            dialog_type: ダイアログタイプ ('basic', 'photo', 'inspection')
+        
+        Returns:
+            位置情報辞書 {'screen': int, 'x': int, 'y': int, 'width': int, 'height': int}
+            存在しない場合はNone
+        
+        Note:
+            - マルチディスプレイ対応
+        """
+        window_positions = self.config.get('window_positions', {})
+        return window_positions.get(dialog_type)
+    
+    def reset_window_positions(self):
+        """
+        全ウィンドウ位置をデフォルトにリセットする。
+        
+        Note:
+            - デフォルト位置は _get_default_config() の値を使用
+        """
+        default_config = self._get_default_config()
+        self.config['window_positions'] = default_config.get('window_positions', {})
+        self.save_config()
+        
+        QgsMessageLog.logMessage(
+            "ConfigManager - ウィンドウ位置をリセット",
+            "PoleFacility", Qgis.Info
+        )

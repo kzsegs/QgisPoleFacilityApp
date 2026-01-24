@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qgis.core import QgsMessageLog, Qgis
 
-from .tabs import BasicSettingsTab, ColumnSettingsTab, DebugSettingsTab
+from .tabs import BasicSettingsTab, ColumnSettingsTab, DebugSettingsTab, WindowPositionTab
 from ..config.manager import ConfigManager
 from ..main.event_bus import EventBus, EventNames
 
@@ -96,6 +96,10 @@ class SettingsDialogWidget(QDialog):
         self.column_settings_tab = ColumnSettingsTab(self)
         self.tab_widget.addTab(self.column_settings_tab, "カラム設定")
         
+        # ウィンドウ位置タブ
+        self.window_position_tab = WindowPositionTab(self.config_manager, self)
+        self.tab_widget.addTab(self.window_position_tab, "ウィンドウ位置")
+        
         # デバッグ設定タブ
         self.debug_settings_tab = DebugSettingsTab(
             self.schema,
@@ -162,9 +166,14 @@ class SettingsDialogWidget(QDialog):
             self.tab_widget.setCurrentIndex(1)
             return False
         
+        # ウィンドウ位置タブ（常にTrue）
+        if not self.window_position_tab.validate():
+            self.tab_widget.setCurrentIndex(2)
+            return False
+        
         # デバッグ設定タブ
         if not self.debug_settings_tab.validate():
-            self.tab_widget.setCurrentIndex(2)
+            self.tab_widget.setCurrentIndex(3)
             return False
         
         return True

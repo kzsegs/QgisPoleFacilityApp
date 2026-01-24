@@ -215,6 +215,9 @@ class MultiWindowFormManager(QObject):
                 dialog.show()
                 logger.debug(f"{dialog_type} dialog shown")
         
+        # ウィンドウ位置・サイズを復元（初回表示時のみ）
+        self.restore_window_positions()
+        
         # イベント発行
         dialog_types = list(self.dialogs.keys())
         self.forms_shown.emit(dialog_types, feature.id())
@@ -491,10 +494,14 @@ class MultiWindowFormManager(QObject):
         リソースをクリーンアップする。
         
         Note:
+            - ウィンドウ位置・サイズを保存
             - 全ダイアログを閉じる
             - ダイアログオブジェクトを破棄
             - 参照をクリア
         """
+        # ウィンドウ位置・サイズを保存
+        self.save_window_positions()
+        
         # 全ダイアログを閉じる
         self.close_all_forms()
         
@@ -519,3 +526,124 @@ class MultiWindowFormManager(QObject):
             "MultiWindowFormManager - クリーンアップ完了",
             "PoleFacility", Qgis.Info
         )
+    
+    def save_window_positions(self):
+        """
+        全ダイアログのウィンドウ位置・サイズを保存する。
+        
+        保存内容:
+            - スクリーン番号（マルチディスプレイ対応）
+            - X,Y座標（絶対座標）
+            - 幅、高さ
+        
+        保存先:
+            config.json の window_positions セクション
+            - basic: 基本属性ダイアログ
+            - photo: 写真管理ダイアログ
+            - inspection: 検査項目ダイアログ
+        
+        Note:
+            - cleanup() から自動的に呼び出される
+            - ダイアログが存在しない場合はスキップ
+            - マルチディスプレイ環境に対応
+        """
+        if self.config_manager is None:
+            logger.warning("ConfigManager is not initialized")
+            return
+        
+        from PyQt5.QtWidgets import QApplication
+        
+        for dialog_type, dialog in self.dialogs.items():
+            if dialog is not None and dialog.isVisible():
+                # 現在のスクリーンを取得
+                screen = QApplication.desktop().screenNumber(dialog)
+                
+                # ウィンドウの位置とサイズを取得（絶対座標）
+                geometry = dialog.geometry()
+                x = geometry.x()
+                y = geometry.y()
+                width = geometry.width()
+                height = geometry.height()
+                
+                # config.jsonに保存
+                self.config_manager.save_window_position(
+                    dialog_type, screen, x, y, width, height
+                )
+                
+                logger.debug(f"{dialog_type} dialog position saved: screen={screen} x={x} y={y} w={width} h={height}")
+                QgsMessageLog.logMessage(
+                    f"MultiWindowFormManager - {dialog_type}ダイアログの位置を保存: screen={screen}",
+                    "PoleFacility", Qgis.Info
+                )
+        
+        logger.info("Window positions saved to config.json")
+    
+    def restore_window_positions(self):
+        """
+        全ダイアログのウィンドウ位置・サイズを復元する。
+        
+        復元内容:
+            - スクリーン番号（マルチディスプレイ対応）
+            - X,Y座標（絶対座標）
+            - 幅、高さ
+        
+        復元元:
+            config.json の window_positions セクション
+        
+        Note:
+            - show_forms() から自動的に呼び出される
+            - 保存データがない場合はデフォルト位置を使用
+            - ダイアログが存在しない場合はスキップ
+            - 画面外チェック機能付き（マルチディスプレイ対応）
+        """
+        if self.config_manager is None:
+            logger.warning("ConfigManager is not initialized")
+            return
+        
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QRect
+        
+        desktop = QApplication.desktop()
+        
+        for dialog_type, dialog in self.dialogs.items():
+            if dialog is not None:
+                # config.jsonから位置情報を取得
+                position = self.config_manager.get_window_position(dialog_type)
+                
+                if position:
+                    screen = position.get('screen', 0)
+                    x = position.get('x', 100)
+                    y = position.get('y', 100)
+                    width = position.get('width', 400)
+                    height = position.get('height', 300)
+                    
+                    # スクリーン数チェック
+                    screen_count = desktop.screenCount()
+                    if screen >= screen_count:
+                        logger.warning(f"{dialog_type}: screen {screen} not found, using screen 0")
+                        screen = 0
+                    
+                    # スクリーンのジオメトリを取得
+                    screen_geometry = desktop.screenGeometry(screen)
+                    
+                    # ウィンドウが画面内に収まるかチェック
+                    window_rect = QRect(x, y, width, height)
+                    
+                    if not screen_geometry.intersects(window_rect):
+                        # 画面外の場合はスクリーン中央に配置
+                        logger.warning(f"{dialog_type}: window outside screen, centering")
+                        x = screen_geometry.x() + (screen_geometry.width() - width) // 2
+                        y = screen_geometry.y() + (screen_geometry.height() - height) // 2
+                    
+                    # 位置とサイズを設定
+                    dialog.setGeometry(x, y, width, height)
+                    
+                    logger.debug(f"{dialog_type} dialog position restored: screen={screen} x={x} y={y} w={width} h={height}")
+                    QgsMessageLog.logMessage(
+                        f"MultiWindowFormManager - {dialog_type}ダイアログの位置を復元: screen={screen}",
+                        "PoleFacility", Qgis.Info
+                    )
+                else:
+                    logger.debug(f"{dialog_type} dialog has no saved position")
+        
+        logger.info("Window positions restored from config.json")

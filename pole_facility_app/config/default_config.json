@@ -41,6 +41,29 @@
     "status_choices": ["正常", "要観察", "要修繕", "危険"],
     "judgment_choices": ["合格", "要注意", "要修繕", "不合格"]
   },
+  "window_positions": {
+    "basic": {
+      "screen": 0,
+      "x": 100,
+      "y": 100,
+      "width": 400,
+      "height": 300
+    },
+    "photo": {
+      "screen": 0,
+      "x": 520,
+      "y": 100,
+      "width": 600,
+      "height": 500
+    },
+    "inspection": {
+      "screen": 0,
+      "x": 100,
+      "y": 420,
+      "width": 500,
+      "height": 600
+    }
+  },
   "field_categories": {
     "basic": {
       "label": "基本属性",
