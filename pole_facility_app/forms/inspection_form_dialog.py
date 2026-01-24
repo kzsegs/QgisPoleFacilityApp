@@ -17,7 +17,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QScrollArea, QWidget, QMessageBox
 )
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtCore import Qt, pyqtSignal, QTimer
 from qgis.core import QgsFeature, QgsVectorLayer, QgsMessageLog, Qgis
 
 from ..forms.sectioned_form_builder import SectionedFormBuilder
@@ -330,22 +330,24 @@ class InspectionFormDialog(QDialog):
         """)
         main_layout.addWidget(title_label)
         
-        # スクロールエリア
-        scroll_area = QScrollArea(self)
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # スクロールエリア（インスタンス変数として保持）
+        self._scroll_area = QScrollArea(self)
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
         # フォームビルダー初期化
         self._form_builder = SectionedFormBuilder(self._config_manager)
         
         # フォームは set_feature() で構築
         # ここではプレースホルダーのみ配置
-        self._form_placeholder = QWidget()
-        self._form_placeholder.setStyleSheet("background-color: #f8f9fa;")
-        scroll_area.setWidget(self._form_placeholder)
+        self._form_placeholder = None  # 明示的にNone初期化
+        placeholder = QWidget()
+        placeholder.setStyleSheet("background-color: #f8f9fa;")
+        self._scroll_area.setWidget(placeholder)
+        self._form_placeholder = placeholder
         
-        main_layout.addWidget(scroll_area)
+        main_layout.addWidget(self._scroll_area)
         
         # ボタンエリア
         button_layout = QHBoxLayout()
@@ -467,13 +469,29 @@ class InspectionFormDialog(QDialog):
             form_widget = self._form_builder.build(self._sections_config, feature)
             
             # 既存のフォームを置き換え
-            if self._form_placeholder:
-                # スクロールエリアのウィジェットを更新
-                scroll_area = self._form_placeholder.parent()
-                if scroll_area:
-                    scroll_area.setWidget(form_widget)
-                    self._form_placeholder.deleteLater()
-                    self._form_placeholder = form_widget
+            if self._form_placeholder is not None:
+                # 古いウィジェットを保存
+                old_widget = self._form_placeholder
+                
+                # 新しいウィジェットをセット
+                self._scroll_area.setWidget(form_widget)
+                self._form_placeholder = form_widget
+                
+                # 古いウィジェットを削除（安全にチェック）
+                try:
+                    if not old_widget.isWidgetType():
+                        # 既に削除されている
+                        pass
+                    else:
+                        # タイミングをずらして削除
+                        QTimer.singleShot(0, old_widget.deleteLater)
+                except RuntimeError:
+                    # 既に削除済み
+                    pass
+            else:
+                # 初回作成
+                self._scroll_area.setWidget(form_widget)
+                self._form_placeholder = form_widget
             
             # タイトル更新
             self._update_title()

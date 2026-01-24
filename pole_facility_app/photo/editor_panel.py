@@ -26,7 +26,7 @@ from qgis.PyQt.QtGui import (
     QPixmap, QImage, QPainter, QColor, QPen, QBrush,
     QPainterPath, QFont, QIcon
 )
-from qgis.PyQt.QtCore import Qt, QPointF, QRectF, QLineF, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import Qt, QPointF, QRectF, QLineF, QTimer, pyqtSignal, QVariant
 from qgis.core import QgsFeature, QgsVectorLayer, QgsMessageLog, Qgis
 
 from ..photo.graphics_items import GraphicsItemFactory
@@ -511,11 +511,28 @@ class PhotoEditorPanel(QWidget):
                 self.graphics_scene.clear()
                 return
             
-            # 参照元から相対パス取得
-            relative_path = self._get_field_value(feature, source_field_name)
+            # 画像パス取得 - 編集済み画像を優先
+            # 1. まず修正後フィールド（編集済み）を確認
+            edited_value = self._get_field_value(feature, field_name)
+            
+            # 2. 編集済み画像があればそれを使用
+            # None, 空文字, QVariant(NULL)を除外
+            if edited_value and edited_value not in (None, '', QVariant()):
+                relative_path = edited_value
+                QgsMessageLog.logMessage(
+                    f"PhotoEditorPanel - 編集済み画像を読み込み: {edited_value}",
+                    "PoleFacility", Qgis.Info
+                )
+            else:
+                # 3. なければ元画像（修正前）を読み込み
+                relative_path = self._get_field_value(feature, source_field_name)
+                QgsMessageLog.logMessage(
+                    f"PhotoEditorPanel - 元画像を読み込み: {relative_path}",
+                    "PoleFacility", Qgis.Info
+                )
             
             if not relative_path:
-                self._update_status("元写真: 未設定", "#999")
+                self._update_status("写真: 未設定", "#999")
                 self.graphics_scene.clear()
                 return
             
@@ -701,6 +718,9 @@ class PhotoEditorPanel(QWidget):
                 if not was_editing and self._layer.isEditable():
                     self._layer.rollBack()
                 raise
+            
+            # ★画像を保存後のファイルで再読み込み（表示更新）★
+            self._reload_saved_photo(actual_path)
             
             # イベント発行
             from pole_facility_app.main.event_bus import EventBus
@@ -898,6 +918,69 @@ class PhotoEditorPanel(QWidget):
             )
         
         return None
+    
+    def _reload_saved_photo(self, saved_path: str):
+        """
+        保存後の画像を再読み込みして表示更新
+        
+        Args:
+            saved_path: 保存先の絶対パス
+        
+        処理:
+            1. 保存した画像を再読み込み
+            2. QGraphicsSceneをクリア
+            3. 新しい画像をセット
+            4. 描画アイテムをクリア（保存済みのため）
+            5. フィット表示
+        
+        Note:
+            このメソッドにより、保存ボタン押下後に
+            編集後の画像が表示されるようになる
+        """
+        try:
+            QgsMessageLog.logMessage(
+                f"PhotoEditorPanel - 保存後の画像を再読み込み: {saved_path}",
+                "PoleFacility", Qgis.Info
+            )
+            
+            # 画像を再読み込み
+            pixmap = self._load_image_as_pixmap(saved_path)
+            
+            if pixmap and not pixmap.isNull():
+                # シーンをクリア
+                self.graphics_scene.clear()
+                
+                # 新しい画像をセット
+                self.pixmap_item = QGraphicsPixmapItem(pixmap)
+                self.graphics_scene.addItem(self.pixmap_item)
+                
+                # 描画アイテムをクリア（保存済みのため編集状態をリセット）
+                self._drawing_items.clear()
+                
+                # シーン範囲設定
+                rect = pixmap.rect()
+                self.graphics_scene.setSceneRect(
+                    QRectF(rect.x(), rect.y(), rect.width(), rect.height())
+                )
+                
+                # フィット表示（少し遅延）
+                QTimer.singleShot(100, self._fit_to_view)
+                
+                QgsMessageLog.logMessage(
+                    "PhotoEditorPanel - 保存後の画像を正常に再読み込みしました",
+                    "PoleFacility", Qgis.Info
+                )
+            else:
+                QgsMessageLog.logMessage(
+                    f"PhotoEditorPanel - 画像の再読み込みに失敗: {saved_path}",
+                    "PoleFacility", Qgis.Warning
+                )
+        
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"PhotoEditorPanel - 画像再読み込みエラー: {str(e)}",
+                "PoleFacility", Qgis.Warning
+            )
     
     def _fit_to_view(self):
         """画像をビューにフィット表示"""

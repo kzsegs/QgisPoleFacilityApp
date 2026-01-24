@@ -554,7 +554,7 @@ class MultiWindowFormManager(QObject):
         from PyQt5.QtWidgets import QApplication
         
         for dialog_type, dialog in self.dialogs.items():
-            if dialog is not None and dialog.isVisible():
+            if dialog is not None:  # ★ isVisible()チェックを削除
                 # 現在のスクリーンを取得
                 screen = QApplication.desktop().screenNumber(dialog)
                 
