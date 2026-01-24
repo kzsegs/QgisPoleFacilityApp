@@ -1,20 +1,36 @@
+# -*- coding: utf-8 -*-
 """
 Forms Module
 
-地物属性の表示・編集を行うフォームウィジェット群を提供するモジュール。
-3タブ構成（基本情報、現場状況、判定結果）でデータを管理する。
+フォーム構築関連のコンポーネントを提供するモジュール。
+
+提供クラス:
+    - FieldWidgetFactory: フィールドウィジェット生成ファクトリ
+    - DynamicFormBuilder: 基本属性用動的フォームビルダー
+    - SectionedFormBuilder: 検査項目用セクション分けフォームビルダー
+
+使用例:
+    from pole_facility_app.forms import (
+        FieldWidgetFactory,
+        DynamicFormBuilder,
+        SectionedFormBuilder
+    )
+    
+    # 基本属性フォーム
+    builder = DynamicFormBuilder(config_manager)
+    form = builder.build(fields_config, feature)
+    
+    # 検査項目フォーム
+    sectioned_builder = SectionedFormBuilder(config_manager)
+    form = sectioned_builder.build(sections_config, feature)
 """
 
-from .attribute_form import AttributeFormWidget
-from .basic_info_tab import BasicInfoTab
-from .field_status_tab import FieldStatusTab
-from .result_tab import ResultTab
-from .photo_thumbnail import PhotoThumbnailWidget
+from .field_widget_factory import FieldWidgetFactory
+from .dynamic_form_builder import DynamicFormBuilder
+from .sectioned_form_builder import SectionedFormBuilder
 
 __all__ = [
-    'AttributeFormWidget',
-    'BasicInfoTab',
-    'FieldStatusTab',
-    'ResultTab',
-    'PhotoThumbnailWidget',
+    'FieldWidgetFactory',
+    'DynamicFormBuilder',
+    'SectionedFormBuilder',
 ]
