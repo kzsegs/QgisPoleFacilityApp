@@ -3,17 +3,23 @@ Navigation Controller Module
 
 画面遷移とダイアログ管理を担当するコントローラ。
 地物選択、属性フォーム表示、各種ダイアログの管理を行う。
+
+v1.6改訂:
+    - MultiWindowFormManager統合（複数ウィンドウUI対応）
+    - show_multi_window_form()メソッド追加
+    - Phase 1互換性維持（設定で切り替え可能）
 """
 
 import logging
 from typing import Optional
 
-from qgis.core import QgsVectorLayer, QgsFeature, QgsProject
+from qgis.core import QgsVectorLayer, QgsFeature, QgsProject, QgsMessageLog, Qgis
 from qgis.gui import QgisInterface, QgsMapToolIdentifyFeature
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QDialog
 
 from .form_strategy import IFormStrategy, QgsFormStrategy
+from ..forms.multi_window_form_manager import MultiWindowFormManager
 
 
 # ロガー設定
@@ -67,7 +73,17 @@ class NavigationController(QObject):
         # フォーム表示戦略（Phase 1ではQGIS標準フォーム）
         self._form_strategy: IFormStrategy = QgsFormStrategy()
         
+        # v1.6: 複数ウィンドウマネージャ
+        self._multi_window_manager = MultiWindowFormManager.get_instance()
+        self._multi_window_manager.initialize(
+            event_bus, config_manager, data_manager
+        )
+        
         logger.info("NavigationController initialized")
+        QgsMessageLog.logMessage(
+            "NavigationController - MultiWindowFormManager統合完了",
+            "PoleFacility", Qgis.Info
+        )
     
     def initialize(self) -> None:
         """
@@ -168,8 +184,11 @@ class NavigationController(QObject):
         
         Note:
             - 選択された地物を保存
-            - 属性フォームを表示
+            - 複数ウィンドウで属性フォームを表示（v1.6）
             - feature.selectedイベントを発行
+        
+        v1.6改訂:
+            show_attribute_form() → show_multi_window_form() に変更
         """
         self._selected_feature = feature
         
@@ -179,20 +198,25 @@ class NavigationController(QObject):
         # イベント発行
         self.event_bus.emit("feature.selected", {"feature_id": feature.id()})
         
-        # 属性フォームを表示
-        self.show_attribute_form(feature)
+        # v1.6: 複数ウィンドウで属性フォームを表示
+        self.show_multi_window_form(feature)
         
         logger.info(f"Feature selected: ID={feature.id()}")
+        QgsMessageLog.logMessage(
+            f"NavigationController - 地物選択: ID={feature.id()}",
+            "PoleFacility", Qgis.Info
+        )
     
     def show_attribute_form(self, feature: QgsFeature) -> None:
         """
-        属性フォームを表示する。
+        属性フォームを表示する（Phase 1互換用）。
         
         Args:
             feature: 表示する地物
         
         Note:
             現在のフォーム表示戦略（Phase 1ではQGIS標準フォーム）を使用
+            Phase 2ではshow_multi_window_form()を使用
         """
         layer = self.data_manager.get_current_layer()
         
@@ -209,16 +233,81 @@ class NavigationController(QObject):
         except Exception as e:
             logger.exception(f"Failed to show attribute form: {e}")
     
+    def show_multi_window_form(self, feature: QgsFeature) -> None:
+        """
+        複数ウィンドウで属性フォームを表示する（v1.6新規）。
+        
+        Args:
+            feature: 表示する地物
+        
+        処理フロー:
+            1. レイヤを取得
+            2. MultiWindowFormManagerにレイヤと地物をセット
+            3. 既に表示中の場合は update_forms()
+            4. 未表示の場合は show_forms()
+        
+        Note:
+            Phase 2の複数ウィンドウUI用メソッド
+        """
+        layer = self.data_manager.get_current_layer()
+        
+        if layer is None:
+            logger.error("No active layer for multi-window form")
+            QgsMessageLog.logMessage(
+                "NavigationController - レイヤが見つかりません",
+                "PoleFacility", Qgis.Warning
+            )
+            return
+        
+        try:
+            # 既に表示中の場合は更新、未表示の場合は新規表示
+            if self._multi_window_manager.is_any_form_visible():
+                self._multi_window_manager.update_forms(feature)
+                QgsMessageLog.logMessage(
+                    f"NavigationController - 複数ウィンドウ更新: feature_id={feature.id()}",
+                    "PoleFacility", Qgis.Info
+                )
+            else:
+                self._multi_window_manager.show_forms(
+                    layer, feature, self.iface.mainWindow()
+                )
+                QgsMessageLog.logMessage(
+                    f"NavigationController - 複数ウィンドウ表示: feature_id={feature.id()}",
+                    "PoleFacility", Qgis.Info
+                )
+            
+            logger.debug(f"Multi-window form shown for feature ID={feature.id()}")
+            
+        except Exception as e:
+            logger.exception(f"Failed to show multi-window form: {e}")
+            QgsMessageLog.logMessage(
+                f"NavigationController - 複数ウィンドウ表示エラー: {str(e)}",
+                "PoleFacility", Qgis.Critical
+            )
+    
     def close_attribute_form(self) -> None:
         """
         現在表示中の属性フォームを閉じる。
+        
+        v1.6改訂:
+            Phase 1の単一フォームと Phase 2の複数ウィンドウ両方に対応
         """
+        # Phase 1: 単一フォーム
         self._form_strategy.close_form()
+        
+        # Phase 2: 複数ウィンドウ
+        if self._multi_window_manager.is_any_form_visible():
+            self._multi_window_manager.close_all_forms()
+        
         self._selected_feature = None
         self.feature_deselected.emit()
         self.event_bus.emit("feature.deselected")
         
         logger.debug("Attribute form closed")
+        QgsMessageLog.logMessage(
+            "NavigationController - 属性フォームを閉じました",
+            "PoleFacility", Qgis.Info
+        )
     
     def close_current_dialog(self) -> None:
         """
@@ -246,6 +335,7 @@ class NavigationController(QObject):
         Note:
             - マップツールの無効化
             - ダイアログの破棄
+            - MultiWindowFormManagerのクリーンアップ（v1.6）
             - リソース解放
         """
         # 選択ツールを無効化
@@ -258,9 +348,17 @@ class NavigationController(QObject):
         # ダイアログを閉じる
         self.close_current_dialog()
         
+        # v1.6: 複数ウィンドウマネージャのクリーンアップ
+        if self._multi_window_manager:
+            self._multi_window_manager.cleanup()
+        
         # マップツールを破棄
         if self._map_tool is not None:
             self._map_tool.deleteLater()
             self._map_tool = None
         
         logger.info("NavigationController cleaned up")
+        QgsMessageLog.logMessage(
+            "NavigationController - クリーンアップ完了",
+            "PoleFacility", Qgis.Info
+        )
