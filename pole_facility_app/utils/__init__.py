@@ -1,7 +1,7 @@
 """
 utils - ユーティリティモジュール
 
-ログ記録、バリデーション、その他の共通機能を提供。
+ログ記録、バリデーション、エラーハンドリング、その他の共通機能を提供。
 """
 
 from .logger import Logger, LogContext, log_function_call
@@ -19,6 +19,11 @@ from .validators import (
     ValidationResult,
     ValidationError,
     ValidationWarning,
+)
+from .error_handler import (
+    ErrorHandler,
+    ValidationError as ErrorHandlerValidationError,
+    ConfigurationError,
 )
 
 __all__ = [
@@ -41,4 +46,9 @@ __all__ = [
     'ValidationResult',
     'ValidationError',
     'ValidationWarning',
+    
+    # Error Handler
+    'ErrorHandler',
+    'ErrorHandlerValidationError',
+    'ConfigurationError',
 ]
