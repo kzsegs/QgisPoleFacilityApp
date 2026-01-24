@@ -36,5 +36,200 @@
     "log_level": "INFO",
     "log_to_file": false,
     "log_file_path": ""
+  },
+  "dropdown_choices": {
+    "status_choices": ["正常", "要観察", "要修繕", "危険"],
+    "judgment_choices": ["合格", "要注意", "要修繕", "不合格"]
+  },
+  "field_categories": {
+    "basic": {
+      "label": "基本属性",
+      "fields": [
+        {
+          "name": "収容区域コード",
+          "label": "収容区域コード",
+          "type": "text",
+          "editable": false,
+          "section": "識別情報"
+        },
+        {
+          "name": "収容区域名",
+          "label": "収容区域名",
+          "type": "text",
+          "editable": false,
+          "section": "識別情報"
+        },
+        {
+          "name": "設備名",
+          "label": "設備名",
+          "type": "text",
+          "editable": false,
+          "section": "識別情報"
+        },
+        {
+          "name": "設備番号",
+          "label": "設備番号",
+          "type": "text",
+          "editable": false,
+          "section": "識別情報"
+        },
+        {
+          "name": "緯度座標",
+          "label": "緯度",
+          "type": "number",
+          "editable": false,
+          "section": "位置情報"
+        },
+        {
+          "name": "経度座標",
+          "label": "経度",
+          "type": "number",
+          "editable": false,
+          "section": "位置情報"
+        }
+      ]
+    },
+    "photo": {
+      "label": "写真",
+      "fields_before": [
+        "設備写真1URI_修正前",
+        "設備写真2URI_修正前",
+        "設備写真3URI_修正前"
+      ],
+      "fields_after": [
+        "設備写真1URI_修正後",
+        "設備写真2URI_修正後",
+        "設備写真3URI_修正後"
+      ]
+    },
+    "inspection": {
+      "label": "検査項目",
+      "sections": [
+        {
+          "name": "inspection_1",
+          "label": "検査箇所1",
+          "fields": [
+            {
+              "name": "検査箇所1",
+              "label": "検査箇所",
+              "type": "text",
+              "editable": true
+            },
+            {
+              "name": "検査状態1",
+              "label": "検査状態",
+              "type": "dropdown",
+              "editable": true,
+              "choices_key": "status_1"
+            },
+            {
+              "name": "検査状態1備考",
+              "label": "備考",
+              "type": "textarea",
+              "editable": true
+            }
+          ]
+        },
+        {
+          "name": "inspection_2",
+          "label": "検査箇所2",
+          "fields": [
+            {
+              "name": "検査箇所2",
+              "label": "検査箇所",
+              "type": "text",
+              "editable": true
+            },
+            {
+              "name": "検査状態2",
+              "label": "検査状態",
+              "type": "dropdown",
+              "editable": true,
+              "choices_key": "status_2"
+            },
+            {
+              "name": "検査状態2備考",
+              "label": "備考",
+              "type": "textarea",
+              "editable": true
+            }
+          ]
+        },
+        {
+          "name": "inspection_3",
+          "label": "検査箇所3",
+          "fields": [
+            {
+              "name": "検査箇所3",
+              "label": "検査箇所",
+              "type": "text",
+              "editable": true
+            },
+            {
+              "name": "検査状態3",
+              "label": "検査状態",
+              "type": "dropdown",
+              "editable": true,
+              "choices_key": "status_3"
+            },
+            {
+              "name": "検査状態3備考",
+              "label": "備考",
+              "type": "textarea",
+              "editable": true
+            }
+          ]
+        },
+        {
+          "name": "judgment",
+          "label": "総合判定",
+          "fields": [
+            {
+              "name": "総合判定結果1",
+              "label": "判定結果",
+              "type": "dropdown",
+              "editable": true,
+              "choices_key": "judgment_choices"
+            },
+            {
+              "name": "総合判定結果1備考",
+              "label": "備考",
+              "type": "textarea",
+              "editable": true
+            }
+          ]
+        },
+        {
+          "name": "inspection_info",
+          "label": "検査情報",
+          "fields": [
+            {
+              "name": "備考",
+              "label": "全体備考",
+              "type": "textarea",
+              "editable": true
+            },
+            {
+              "name": "検査日",
+              "label": "検査日",
+              "type": "date",
+              "editable": true
+            },
+            {
+              "name": "検査者氏名",
+              "label": "検査者",
+              "type": "text",
+              "editable": true
+            },
+            {
+              "name": "確認者氏名",
+              "label": "確認者",
+              "type": "text",
+              "editable": true
+            }
+          ]
+        }
+      ]
+    }
   }
 }
