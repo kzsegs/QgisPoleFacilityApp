@@ -306,6 +306,9 @@ class PhotoEditorPanel(QWidget):
         self.line_width = 3
         self.font_size = 12
         
+        # 描画アイテム管理（v1.6.1修正: 初期化追加）
+        self._drawing_items = []
+        
         self._create_ui()
     
     def _create_ui(self):
@@ -503,6 +506,9 @@ class PhotoEditorPanel(QWidget):
         self._feature = feature
         self._field_name = field_name
         self._source_field_name = source_field_name
+        
+        # 描画アイテムをクリア（v1.6.1修正: 新しい画像読み込み時にリセット）
+        self._drawing_items = []
         
         try:
             # バリデーション
