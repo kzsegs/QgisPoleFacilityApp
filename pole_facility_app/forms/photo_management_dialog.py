@@ -394,7 +394,7 @@ class PhotoManagementDialog(QDialog):
         
         try:
             # 設備番号を取得
-            equipment_number = self._feature.get("設備番号", "")
+            equipment_number = self._feature["設備番号"] if "設備番号" in self._feature.fields().names() else ""
             
             if equipment_number:
                 self.setWindowTitle(f"写真管理 - 設備番号: {equipment_number}")

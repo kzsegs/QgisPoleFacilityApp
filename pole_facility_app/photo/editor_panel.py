@@ -546,16 +546,48 @@ class PhotoEditorPanel(QWidget):
             
             # ファイル存在チェック
             if not os.path.exists(actual_path):
-                filename = os.path.basename(actual_path)
-                self._update_status(f"❌ ファイルなし: {filename}", "#FF3B30")
-                self.graphics_scene.clear()
-                
-                QgsMessageLog.logMessage(
-                    f"PhotoEditorPanel - ファイルが存在しません: {actual_path}",
-                    "PoleFacility", Qgis.Warning
-                )
-                
-                raise FileNotFoundError(f"元写真ファイルが見つかりません: {actual_path}")
+                # 編集後画像が見つからない場合、元画像にフォールバック
+                if field_name != source_field_name:  # 編集後を探していた場合
+                    QgsMessageLog.logMessage(
+                        f"PhotoEditorPanel - 編集後画像が見つかりません、元画像を使用: {actual_path}",
+                        "PoleFacility", Qgis.Warning
+                    )
+                    
+                    # 元画像を再取得
+                    source_value = self._get_field_value(feature, source_field_name)
+                    if source_value:
+                        relative_path = source_value
+                        actual_path = self._resolve_photo_path(source_value)
+                        
+                        QgsMessageLog.logMessage(
+                            f"PhotoEditorPanel - 元画像パスに切り替え: {actual_path}",
+                            "PoleFacility", Qgis.Info
+                        )
+                        
+                        if not os.path.exists(actual_path):
+                            # 元画像もない場合はエラー
+                            filename = os.path.basename(actual_path)
+                            self._update_status(f"❌ ファイルなし: {filename}", "#FF3B30")
+                            self.graphics_scene.clear()
+                            raise FileNotFoundError(f"元写真ファイルが見つかりません: {actual_path}")
+                    else:
+                        # 元画像パスもない場合はエラー
+                        filename = os.path.basename(actual_path)
+                        self._update_status(f"❌ ファイルなし: {filename}", "#FF3B30")
+                        self.graphics_scene.clear()
+                        raise FileNotFoundError(f"写真ファイルが設定されていません")
+                else:
+                    # 元画像が見つからない場合はエラー
+                    filename = os.path.basename(actual_path)
+                    self._update_status(f"❌ ファイルなし: {filename}", "#FF3B30")
+                    self.graphics_scene.clear()
+                    
+                    QgsMessageLog.logMessage(
+                        f"PhotoEditorPanel - ファイルが存在しません: {actual_path}",
+                        "PoleFacility", Qgis.Warning
+                    )
+                    
+                    raise FileNotFoundError(f"元写真ファイルが見つかりません: {actual_path}")
             
             # 画像読み込み
             pixmap = self._load_image_as_pixmap(actual_path)

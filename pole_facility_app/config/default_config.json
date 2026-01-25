@@ -20,10 +20,12 @@
     "thumbnail_size": 100,
     "auto_save_interval_minutes": 0
   },
-  "inspection_status": {
+  "dropdown_choices": {
     "status_1": ["状態1A", "状態1B", "状態1C", "状態1D", "その他1"],
     "status_2": ["状態2A", "状態2B", "状態2C", "状態2D", "その他2"],
-    "status_3": ["状態3A", "状態3B", "状態3C", "状態3D", "その他3"]
+    "status_3": ["状態3A", "状態3B", "状態3C", "状態3D", "その他3"],
+    "status_choices": ["正常", "要観察", "要修繕", "危険"],
+    "judgment_choices": ["合格", "要注意", "要修繕", "不合格"]
   },
   "field_mapping": {
     "latitude": "緯度座標",
@@ -36,10 +38,6 @@
     "log_level": "INFO",
     "log_to_file": false,
     "log_file_path": ""
-  },
-  "dropdown_choices": {
-    "status_choices": ["正常", "要観察", "要修繕", "危険"],
-    "judgment_choices": ["合格", "要注意", "要修繕", "不合格"]
   },
   "window_positions": {
     "basic": {

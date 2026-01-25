@@ -251,10 +251,10 @@ class FieldWidgetFactory:
             # 設定ファイル参照
             {
                 "type": "dropdown",
-                "choices_key": "status_1",
+                "choices_key": "status_choices",
                 "editable": True
             }
-            # → default_config.json の inspection_status.status_1 を参照
+            # → default_config.json の dropdown_choices.status_choices を参照
         
         Note:
             choices_keyとchoicesの両方が指定された場合、choices_keyを優先
@@ -268,13 +268,13 @@ class FieldWidgetFactory:
         choices_key = config.get("choices_key")
         if choices_key and config_manager:
             try:
-                # inspection_status.{choices_key} から取得
-                inspection_status = config_manager.get("inspection_status", {})
-                choices = inspection_status.get(choices_key, [])
+                # dropdown_choices.{choices_key} から取得
+                dropdown_choices = config_manager.get("dropdown_choices", {})
+                choices = dropdown_choices.get(choices_key, [])
                 
                 if not choices:
                     ErrorHandler.log_warning(
-                        f"選択肢が見つかりません: inspection_status.{choices_key}"
+                        f"選択肢が見つかりません: dropdown_choices.{choices_key}"
                     )
             except Exception as e:
                 ErrorHandler.log_error(
