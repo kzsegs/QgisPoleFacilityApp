@@ -32,8 +32,6 @@ from qgis.core import (
     QgsGeometry,
     QgsPointXY,
     QgsProject,
-    QgsMessageLog,
-    Qgis,
     QgsWkbTypes,
     QgsCoordinateReferenceSystem
 )
@@ -43,6 +41,7 @@ from PyQt5.QtCore import QVariant
 from ..main.event_bus import EventBus, EventNames
 from .csv_parser import CSVParser, ValidationResult, DataImportError
 from .gpkg_handler import GeoPackageHandler, DataSaveError
+from ..utils.logger import Logger
 
 
 class DataManager:
@@ -93,11 +92,7 @@ class DataManager:
         self.last_editor: str = ""
         self.modification_history: List[Dict[str, Any]] = []
         
-        QgsMessageLog.logMessage(
-            "DataManager初期化完了",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("DataManager初期化完了")
     
     # ========== ダイアログメソッド（新規追加） ==========
     
@@ -117,11 +112,7 @@ class DataManager:
         )
         
         if not file_path:
-            QgsMessageLog.logMessage(
-                "CSVインポートがキャンセルされました",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("CSVインポートがキャンセルされました")
             return False
         
         try:
@@ -182,11 +173,7 @@ class DataManager:
         )
         
         if not file_path:
-            QgsMessageLog.logMessage(
-                "CSVエクスポートがキャンセルされました",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("CSVエクスポートがキャンセルされました")
             return False
         
         try:
@@ -237,11 +224,7 @@ class DataManager:
             7. data.importedイベント発行
         """
         try:
-            QgsMessageLog.logMessage(
-                f"CSVインポート開始: {csv_path}",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info(f"CSVインポート開始: {csv_path}")
             
             # 1. ファイル存在確認
             if not os.path.exists(csv_path):
@@ -273,11 +256,7 @@ class DataManager:
             
             # 4.5. 写真ウィジェット設定（★追加）
             self._setup_photo_widgets(layer)
-            QgsMessageLog.logMessage(
-                "写真ウィジェット設定を適用しました",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("写真ウィジェット設定を適用しました")
             
             # 5. スタイル設定
             self._setup_layer_style(layer)
@@ -301,22 +280,14 @@ class DataManager:
                 "source_path": csv_path
             })
             
-            QgsMessageLog.logMessage(
-                f"CSVインポート完了: {layer.featureCount()}件",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info(f"CSVインポート完了: {layer.featureCount()}件")
             
             return True
             
         except DataImportError:
             raise
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"CSVインポートエラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"CSVインポートエラー: {str(e)}")
             raise DataImportError(f"予期しないエラー: {str(e)}")
     
     def save_to_gpkg(self, gpkg_path: Optional[str] = None) -> bool:
@@ -346,11 +317,7 @@ class DataManager:
                     "pole_facility_work.gpkg"
                 )
             
-            QgsMessageLog.logMessage(
-                f"GeoPackage保存開始: {self.gpkg_path}",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info(f"GeoPackage保存開始: {self.gpkg_path}")
             
             # メタデータ作成
             metadata = {
@@ -375,11 +342,7 @@ class DataManager:
                     "last_editor": self.last_editor,
                 })
                 
-                QgsMessageLog.logMessage(
-                    f"GeoPackage保存完了: {self.gpkg_path}",
-                    "PoleFacility",
-                    Qgis.Info
-                )
+                Logger.info(f"GeoPackage保存完了: {self.gpkg_path}")
                 
                 # 成功メッセージ
                 QMessageBox.information(
@@ -392,11 +355,7 @@ class DataManager:
             return success
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"GeoPackage保存エラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"GeoPackage保存エラー: {str(e)}")
             QMessageBox.critical(
                 self.iface.mainWindow(),
                 "保存エラー",
@@ -421,11 +380,7 @@ class DataManager:
             raise ValueError("エクスポートするレイヤがありません")
         
         try:
-            QgsMessageLog.logMessage(
-                f"CSVエクスポート開始: {output_path}",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info(f"CSVエクスポート開始: {output_path}")
             
             # フィールド名取得
             field_names = [field.name() for field in self.current_layer.fields()]
@@ -461,20 +416,12 @@ class DataManager:
                 "feature_count": self.current_layer.featureCount(),
             })
             
-            QgsMessageLog.logMessage(
-                f"CSVエクスポート完了: {self.current_layer.featureCount()}件",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info(f"CSVエクスポート完了: {self.current_layer.featureCount()}件")
             
             return True
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"CSVエクスポートエラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"CSVエクスポートエラー: {str(e)}")
             raise
     
     def get_current_layer(self) -> Optional[QgsVectorLayer]:
@@ -531,11 +478,7 @@ class DataManager:
                     "feature_id": feature.id(),
                 })
                 
-                QgsMessageLog.logMessage(
-                    f"地物更新完了: ID={feature.id()}",
-                    "PoleFacility",
-                    Qgis.Info
-                )
+                Logger.info(f"地物更新完了: ID={feature.id()}")
             else:
                 self.current_layer.rollBack()
             
@@ -543,11 +486,7 @@ class DataManager:
             
         except Exception as e:
             self.current_layer.rollBack()
-            QgsMessageLog.logMessage(
-                f"地物更新エラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"地物更新エラー: {str(e)}")
             return False
     
     def is_data_modified(self) -> bool:
@@ -566,11 +505,7 @@ class DataManager:
             name: 編集者名
         """
         self.last_editor = name
-        QgsMessageLog.logMessage(
-            f"最終編集者設定: {name}",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info(f"最終編集者設定: {name}")
     
     def has_unsaved_changes(self) -> bool:
         """未保存の変更があるかチェックする。"""
@@ -584,11 +519,7 @@ class DataManager:
         self.is_modified = False
         self.modification_history.clear()
         
-        QgsMessageLog.logMessage(
-            "DataManagerクリーンアップ完了",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("DataManagerクリーンアップ完了")
     
     def _create_layer_from_data(self, data: List[Dict[str, Any]]) -> QgsVectorLayer:
         """
@@ -625,11 +556,7 @@ class DataManager:
             
             # デバッグ: 座標値を確認
             if lat is None or lon is None:
-                QgsMessageLog.logMessage(
-                    f"警告: 座標が空です - 設備番号: {row.get('設備番号')}, lat={lat}, lon={lon}",
-                    "PoleFacility",
-                    Qgis.Warning
-                )
+                Logger.warning(f"警告: 座標が空です - 設備番号: {row.get('設備番号')}, lat={lat}, lon={lon}")
             
             if lat is not None and lon is not None:
                 try:
@@ -641,23 +568,11 @@ class DataManager:
                     
                     # デバッグ: ジオメトリ設定を確認
                     if feature.hasGeometry():
-                        QgsMessageLog.logMessage(
-                            f"ジオメトリ設定成功: 設備番号={row.get('設備番号')}, 座標=({lon_float}, {lat_float})",
-                            "PoleFacility",
-                            Qgis.Info
-                        )
+                        Logger.info(f"ジオメトリ設定成功: 設備番号={row.get('設備番号')}, 座標=({lon_float}, {lat_float})")
                     else:
-                        QgsMessageLog.logMessage(
-                            f"エラー: ジオメトリが設定されませんでした - 設備番号={row.get('設備番号')}",
-                            "PoleFacility",
-                            Qgis.Critical
-                        )
+                        Logger.error(f"エラー: ジオメトリが設定されませんでした - 設備番号={row.get('設備番号')}")
                 except (ValueError, TypeError) as e:
-                    QgsMessageLog.logMessage(
-                        f"座標変換エラー: 設備番号={row.get('設備番号')}, lat={lat}, lon={lon}, error={str(e)}",
-                        "PoleFacility",
-                        Qgis.Critical
-                    )
+                    Logger.error(f"座標変換エラー: 設備番号={row.get('設備番号')}, lat={lat}, lon={lon}, error={str(e)}")
             
             # 属性設定
             for field in fields:
@@ -672,27 +587,13 @@ class DataManager:
         
         # デバッグ: レイヤ情報を出力
         extent = layer.extent()
-        QgsMessageLog.logMessage(
-            f"レイヤ作成完了: {len(features)}件",
-            "PoleFacility",
-            Qgis.Info
-        )
-        QgsMessageLog.logMessage(
+        Logger.info(f"レイヤ作成完了: {len(features)}件")
+        Logger.info(
             f"レイヤ範囲: xMin={extent.xMinimum():.6f}, yMin={extent.yMinimum():.6f}, "
-            f"xMax={extent.xMaximum():.6f}, yMax={extent.yMaximum():.6f}",
-            "PoleFacility",
-            Qgis.Info
+            f"xMax={extent.xMaximum():.6f}, yMax={extent.yMaximum():.6f}"
         )
-        QgsMessageLog.logMessage(
-            f"レイヤCRS: {layer.crs().authid()}",
-            "PoleFacility",
-            Qgis.Info
-        )
-        QgsMessageLog.logMessage(
-            f"ジオメトリタイプ: {QgsWkbTypes.displayString(layer.wkbType())}",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info(f"レイヤCRS: {layer.crs().authid()}")
+        Logger.info(f"ジオメトリタイプ: {QgsWkbTypes.displayString(layer.wkbType())}")
         
         # 写真ウィジェットを設定
         self._setup_photo_widgets(layer)
@@ -775,11 +676,7 @@ class DataManager:
                     )
                     layer.setEditorWidgetSetup(field_idx, setup)
                     
-                    QgsMessageLog.logMessage(
-                        f"Photo Viewer設定: {field_name}",
-                        "PoleFacility",
-                        Qgis.Info
-                    )
+                    Logger.info(f"Photo Viewer設定: {field_name}")
             
             # 修正後写真フィールド（編集可能）
             for i in [1, 2, 3]:
@@ -795,24 +692,12 @@ class DataManager:
                     )
                     layer.setEditorWidgetSetup(field_idx, setup)
                     
-                    QgsMessageLog.logMessage(
-                        f"Photo Editor設定: {field_name}",
-                        "PoleFacility",
-                        Qgis.Info
-                    )
+                    Logger.info(f"Photo Editor設定: {field_name}")
             
-            QgsMessageLog.logMessage(
-                "写真ウィジェットを設定しました",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("写真ウィジェットを設定しました")
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"写真ウィジェット設定エラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Warning
-            )
+            Logger.warning(f"写真ウィジェット設定エラー: {str(e)}")
     
     def fix_photo_widget_settings(self, layer: Optional[QgsVectorLayer] = None) -> bool:
         """
@@ -835,20 +720,12 @@ class DataManager:
             target_layer = layer if layer else self.current_layer
             
             if not target_layer or not target_layer.isValid():
-                QgsMessageLog.logMessage(
-                    "修正対象のレイヤが見つかりません",
-                    "PoleFacility",
-                    Qgis.Warning
-                )
+                Logger.warning("修正対象のレイヤが見つかりません")
                 return False
             
             from qgis.core import QgsEditorWidgetSetup
             
-            QgsMessageLog.logMessage(
-                f"写真ウィジェット設定を修正中: {target_layer.name()}",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info(f"写真ウィジェット設定を修正中: {target_layer.name()}")
             
             fixed_count = 0
             
@@ -863,11 +740,7 @@ class DataManager:
                     
                     # 期待されるタイプと異なる、または古いプラグイン設定の場合
                     if current_type != "Photo Viewer":
-                        QgsMessageLog.logMessage(
-                            f"修正: {field_name} ({current_type} → Photo Viewer)",
-                            "PoleFacility",
-                            Qgis.Info
-                        )
+                        Logger.info(f"修正: {field_name} ({current_type} → Photo Viewer)")
                         
                         setup = QgsEditorWidgetSetup("Photo Viewer", {})
                         target_layer.setEditorWidgetSetup(field_idx, setup)
@@ -884,11 +757,7 @@ class DataManager:
                     
                     # 期待されるタイプと異なる、または古いプラグイン設定の場合
                     if current_type != "Photo Editor":
-                        QgsMessageLog.logMessage(
-                            f"修正: {field_name} ({current_type} → Photo Editor)",
-                            "PoleFacility",
-                            Qgis.Info
-                        )
+                        Logger.info(f"修正: {field_name} ({current_type} → Photo Editor)")
                         
                         setup = QgsEditorWidgetSetup(
                             "Photo Editor",
@@ -898,26 +767,14 @@ class DataManager:
                         fixed_count += 1
             
             if fixed_count > 0:
-                QgsMessageLog.logMessage(
-                    f"✓ 写真ウィジェット設定を修正しました ({fixed_count}件)",
-                    "PoleFacility",
-                    Qgis.Info
-                )
+                Logger.info(f"✓ 写真ウィジェット設定を修正しました ({fixed_count}件)")
                 return True
             else:
-                QgsMessageLog.logMessage(
-                    "✓ 写真ウィジェット設定は正常です",
-                    "PoleFacility",
-                    Qgis.Info
-                )
+                Logger.info("✓ 写真ウィジェット設定は正常です")
                 return False
         
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"❌ 写真ウィジェット設定の修正エラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"❌ 写真ウィジェット設定の修正エラー: {str(e)}")
             return False
     
     def _add_layer_to_project(self, layer: QgsVectorLayer) -> None:
@@ -929,11 +786,7 @@ class DataManager:
         """
         QgsProject.instance().addMapLayer(layer)
         
-        QgsMessageLog.logMessage(
-            f"レイヤ追加完了: {layer.name()}",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info(f"レイヤ追加完了: {layer.name()}")
     
     def _zoom_to_layer(self, layer: QgsVectorLayer) -> None:
         """
@@ -965,10 +818,8 @@ class DataManager:
         self.iface.mapCanvas().setExtent(extent)
         self.iface.mapCanvas().refresh()
         
-        QgsMessageLog.logMessage(
+        Logger.info(
             f"地図表示をレイヤ範囲に調整: "
             f"範囲=({extent.xMinimum():.6f}, {extent.yMinimum():.6f}) - "
-            f"({extent.xMaximum():.6f}, {extent.yMaximum():.6f})",
-            "PoleFacility",
-            Qgis.Info
+            f"({extent.xMaximum():.6f}, {extent.yMaximum():.6f})"
         )

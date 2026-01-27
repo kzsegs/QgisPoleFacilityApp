@@ -10,20 +10,16 @@ v1.6改訂:
     - Phase 1互換性維持（設定で切り替え可能）
 """
 
-import logging
 from typing import Optional
 
-from qgis.core import QgsVectorLayer, QgsFeature, QgsProject, QgsMessageLog, Qgis
+from qgis.core import QgsVectorLayer, QgsFeature, QgsProject
 from qgis.gui import QgisInterface, QgsMapToolIdentifyFeature
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QDialog
 
 from .form_strategy import IFormStrategy, QgsFormStrategy
 from ..forms.multi_window_form_manager import MultiWindowFormManager
-
-
-# ロガー設定
-logger = logging.getLogger(__name__)
+from ..utils.logger import Logger
 
 
 class NavigationController(QObject):
@@ -79,11 +75,8 @@ class NavigationController(QObject):
             event_bus, config_manager, data_manager
         )
         
-        logger.info("NavigationController initialized")
-        QgsMessageLog.logMessage(
-            "NavigationController - MultiWindowFormManager統合完了",
-            "PoleFacility", Qgis.Info
-        )
+        Logger.info("NavigationController initialized")
+        Logger.info("NavigationController - MultiWindowFormManager統合完了")
     
     def initialize(self) -> None:
         """
@@ -92,7 +85,7 @@ class NavigationController(QObject):
         地図ツールのセットアップ、シグナル接続を行う。
         """
         # マップツールは後でセットアップ（データがインポートされた後）
-        logger.info("NavigationController initialized successfully")
+        Logger.info("NavigationController initialized successfully")
     
     def _setup_map_tool(self) -> None:
         """
@@ -106,7 +99,7 @@ class NavigationController(QObject):
         layer = self.data_manager.get_current_layer()
         
         if layer is None:
-            logger.warning("No active layer for map tool setup")
+            Logger.warning("No active layer for map tool setup")
             return
         
         # 地物選択ツールを作成
@@ -116,7 +109,7 @@ class NavigationController(QObject):
         # 地物選択時のシグナル接続
         self._map_tool.featureIdentified.connect(self._on_feature_identified)
         
-        logger.debug("Map tool setup completed")
+        Logger.debug("Map tool setup completed")
     
     def activate_select_tool(self) -> None:
         """
@@ -129,7 +122,7 @@ class NavigationController(QObject):
             self._setup_map_tool()
         
         if self._map_tool is None:
-            logger.error("Failed to setup map tool")
+            Logger.error("Failed to setup map tool")
             return
         
         canvas = self.iface.mapCanvas()
@@ -143,7 +136,7 @@ class NavigationController(QObject):
         # イベント発行
         self.event_bus.emit("select_tool.activated")
         
-        logger.info("Select tool activated")
+        Logger.info("Select tool activated")
     
     def deactivate_select_tool(self) -> None:
         """
@@ -160,7 +153,7 @@ class NavigationController(QObject):
         # イベント発行
         self.event_bus.emit("select_tool.deactivated")
         
-        logger.info("Select tool deactivated")
+        Logger.info("Select tool deactivated")
     
     def is_select_tool_active(self) -> bool:
         """
@@ -201,11 +194,8 @@ class NavigationController(QObject):
         # v1.6: 複数ウィンドウで属性フォームを表示
         self.show_multi_window_form(feature)
         
-        logger.info(f"Feature selected: ID={feature.id()}")
-        QgsMessageLog.logMessage(
-            f"NavigationController - 地物選択: ID={feature.id()}",
-            "PoleFacility", Qgis.Info
-        )
+        Logger.info(f"Feature selected: ID={feature.id()}")
+        Logger.info(f"NavigationController - 地物選択: ID={feature.id()}")
     
     def show_attribute_form(self, feature: QgsFeature) -> None:
         """
@@ -221,17 +211,17 @@ class NavigationController(QObject):
         layer = self.data_manager.get_current_layer()
         
         if layer is None:
-            logger.error("No active layer for attribute form")
+            Logger.error("No active layer for attribute form")
             return
         
         try:
             # フォーム表示戦略を使用してフォームを表示
             self._form_strategy.show_form(layer, feature, self.iface.mainWindow())
             
-            logger.debug(f"Attribute form shown for feature ID={feature.id()}")
+            Logger.debug(f"Attribute form shown for feature ID={feature.id()}")
             
         except Exception as e:
-            logger.exception(f"Failed to show attribute form: {e}")
+            Logger.exception(f"Failed to show attribute form: {e}")
     
     def show_multi_window_form(self, feature: QgsFeature) -> None:
         """
@@ -252,38 +242,26 @@ class NavigationController(QObject):
         layer = self.data_manager.get_current_layer()
         
         if layer is None:
-            logger.error("No active layer for multi-window form")
-            QgsMessageLog.logMessage(
-                "NavigationController - レイヤが見つかりません",
-                "PoleFacility", Qgis.Warning
-            )
+            Logger.error("No active layer for multi-window form")
+            Logger.warning("NavigationController - レイヤが見つかりません")
             return
         
         try:
             # 既に表示中の場合は更新、未表示の場合は新規表示
             if self._multi_window_manager.is_any_form_visible():
                 self._multi_window_manager.update_forms(feature)
-                QgsMessageLog.logMessage(
-                    f"NavigationController - 複数ウィンドウ更新: feature_id={feature.id()}",
-                    "PoleFacility", Qgis.Info
-                )
+                Logger.info(f"NavigationController - 複数ウィンドウ更新: feature_id={feature.id()}")
             else:
                 self._multi_window_manager.show_forms(
                     layer, feature, self.iface.mainWindow()
                 )
-                QgsMessageLog.logMessage(
-                    f"NavigationController - 複数ウィンドウ表示: feature_id={feature.id()}",
-                    "PoleFacility", Qgis.Info
-                )
+                Logger.info(f"NavigationController - 複数ウィンドウ表示: feature_id={feature.id()}")
             
-            logger.debug(f"Multi-window form shown for feature ID={feature.id()}")
+            Logger.debug(f"Multi-window form shown for feature ID={feature.id()}")
             
         except Exception as e:
-            logger.exception(f"Failed to show multi-window form: {e}")
-            QgsMessageLog.logMessage(
-                f"NavigationController - 複数ウィンドウ表示エラー: {str(e)}",
-                "PoleFacility", Qgis.Critical
-            )
+            Logger.exception(f"Failed to show multi-window form: {e}")
+            Logger.error(f"NavigationController - 複数ウィンドウ表示エラー: {str(e)}")
     
     def close_attribute_form(self) -> None:
         """
@@ -303,11 +281,8 @@ class NavigationController(QObject):
         self.feature_deselected.emit()
         self.event_bus.emit("feature.deselected")
         
-        logger.debug("Attribute form closed")
-        QgsMessageLog.logMessage(
-            "NavigationController - 属性フォームを閉じました",
-            "PoleFacility", Qgis.Info
-        )
+        Logger.debug("Attribute form closed")
+        Logger.info("NavigationController - 属性フォームを閉じました")
     
     def close_current_dialog(self) -> None:
         """
@@ -317,7 +292,7 @@ class NavigationController(QObject):
             self._current_dialog.close()
             self._current_dialog = None
             
-            logger.debug("Current dialog closed")
+            Logger.debug("Current dialog closed")
     
     def get_selected_feature(self) -> Optional[QgsFeature]:
         """
@@ -357,8 +332,5 @@ class NavigationController(QObject):
             self._map_tool.deleteLater()
             self._map_tool = None
         
-        logger.info("NavigationController cleaned up")
-        QgsMessageLog.logMessage(
-            "NavigationController - クリーンアップ完了",
-            "PoleFacility", Qgis.Info
-        )
+        Logger.info("NavigationController cleaned up")
+        Logger.info("NavigationController - クリーンアップ完了")

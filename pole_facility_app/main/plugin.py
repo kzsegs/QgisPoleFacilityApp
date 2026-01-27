@@ -211,6 +211,28 @@ class PoleFacilityMain:
             from ..utils.logger import Logger
             Logger.configure(self.config_manager)
             
+            # Logger内部状態を確認（v1.9.1デバッグ用）
+            debug_config = self.config_manager.get("debug", {})
+            QgsMessageLog.logMessage(
+                f"=== Logger設定確認 ===\n"
+                f"  _log_to_file: {Logger._log_to_file}\n"
+                f"  _log_directory: {Logger._log_directory}\n"
+                f"  _log_level: {Logger._log_level}\n"
+                f"  _log_file: {Logger._log_file}\n"
+                f"  _initialized: {Logger._initialized}\n"
+                f"=== ConfigManager設定 ===\n"
+                f"  log_to_file: {debug_config.get('log_to_file')}\n"
+                f"  log_directory: {debug_config.get('log_directory')}\n"
+                f"  log_level: {debug_config.get('log_level')}",
+                "PoleFacility", Qgis.Info
+            )
+            
+            # テストログ出力（v1.9.1デバッグ用）
+            Logger.info("=== プラグイン起動：Logger初期化完了 ===")
+            Logger.warning("=== テスト警告：Logger動作確認 ===")
+            Logger.error("=== テストエラー：ファイル出力確認 ===")
+            Logger.debug("=== DEBUGレベル：このメッセージはファイルのみに出力 ===")
+            
             # 写真ウィジェットを登録
             PhotoWidgetFactory.register_widgets()
             

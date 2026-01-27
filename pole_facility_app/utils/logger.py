@@ -126,28 +126,110 @@ class Logger:
             ファイル作成に失敗した場合はログファイルをNoneにし、
             QGISログのみに出力する。
         """
+        # デバッグ：処理開始をログ出力
         try:
-            if not os.path.exists(cls._log_directory):
-                os.makedirs(cls._log_directory)
+            from qgis.core import QgsMessageLog, Qgis
+            QgsMessageLog.logMessage(
+                f"[DEBUG] _initialize_log_file() 開始: directory={cls._log_directory}",
+                cls.TAG, Qgis.Info
+            )
+        except ImportError:
+            pass
+        
+        try:
+            # ステップ1: ディレクトリ確認
+            dir_exists = os.path.exists(cls._log_directory)
+            try:
+                from qgis.core import QgsMessageLog, Qgis
+                QgsMessageLog.logMessage(
+                    f"[DEBUG] ディレクトリ存在チェック: {dir_exists}",
+                    cls.TAG, Qgis.Info
+                )
+            except ImportError:
+                pass
             
+            if not dir_exists:
+                try:
+                    from qgis.core import QgsMessageLog, Qgis
+                    QgsMessageLog.logMessage(
+                        f"[DEBUG] ディレクトリ作成を試行: {cls._log_directory}",
+                        cls.TAG, Qgis.Info
+                    )
+                except ImportError:
+                    pass
+                os.makedirs(cls._log_directory)
+                try:
+                    from qgis.core import QgsMessageLog, Qgis
+                    QgsMessageLog.logMessage(
+                        f"[DEBUG] ディレクトリ作成成功",
+                        cls.TAG, Qgis.Info
+                    )
+                except ImportError:
+                    pass
+            
+            # ステップ2: ファイルパス生成
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"pole_facility_{timestamp}.log"
             filepath = os.path.join(cls._log_directory, filename)
             
+            try:
+                from qgis.core import QgsMessageLog, Qgis
+                QgsMessageLog.logMessage(
+                    f"[DEBUG] ファイルパス生成: {filepath}",
+                    cls.TAG, Qgis.Info
+                )
+            except ImportError:
+                pass
+            
+            # ステップ3: ファイルオープン
+            try:
+                from qgis.core import QgsMessageLog, Qgis
+                QgsMessageLog.logMessage(
+                    f"[DEBUG] ファイルオープンを試行",
+                    cls.TAG, Qgis.Info
+                )
+            except ImportError:
+                pass
+            
             cls._log_file = open(filepath, 'w', encoding='utf-8')
+            
+            try:
+                from qgis.core import QgsMessageLog, Qgis
+                QgsMessageLog.logMessage(
+                    f"[DEBUG] ファイルオープン成功: {cls._log_file}",
+                    cls.TAG, Qgis.Info
+                )
+            except ImportError:
+                pass
+            
+            # ステップ4: 初期メッセージ書き込み
             cls._write_to_file("INFO", f"=== ログ開始: {filepath} ===")
+            
+            try:
+                from qgis.core import QgsMessageLog, Qgis
+                QgsMessageLog.logMessage(
+                    f"[DEBUG] _initialize_log_file() 完了",
+                    cls.TAG, Qgis.Info
+                )
+            except ImportError:
+                pass
             
         except Exception as e:
             cls._log_file = None
             # ファイル作成失敗はQGISログのみに記録
+            import traceback
+            error_detail = traceback.format_exc()
             try:
                 from qgis.core import QgsMessageLog, Qgis
                 QgsMessageLog.logMessage(
-                    f"ログファイルの作成に失敗しました: {str(e)}",
-                    cls.TAG, Qgis.Warning
+                    f"[ERROR] ログファイルの作成に失敗しました:\n"
+                    f"  エラー: {str(e)}\n"
+                    f"  ディレクトリ: {cls._log_directory}\n"
+                    f"  詳細:\n{error_detail}",
+                    cls.TAG, Qgis.Critical
                 )
             except ImportError:
-                print(f"[WARNING] {cls.TAG}: ログファイルの作成に失敗しました: {str(e)}")
+                print(f"[WARNING] {cls.TAG}: ログファイルの作成に失敗しました: {str(e)}\n{error_detail}")
     
     @classmethod
     def _write_to_file(cls, level: str, message: str) -> None:

@@ -21,12 +21,12 @@ UI制御 - QGIS標準UIの表示/非表示制御とカスタムUIの管理
 from typing import List, Optional
 from PyQt5.QtWidgets import QToolBar, QDockWidget, QMainWindow, QStatusBar
 from PyQt5.QtCore import QTimer
-from qgis.core import QgsMessageLog, Qgis
 from qgis.gui import QgisInterface
 
 from ..main.event_bus import EventBus, EventNames
 from ..main.ui_state import UIState
 from .toolbar import CustomToolbarWidget
+from ..utils.logger import Logger
 
 
 class UIController:
@@ -115,11 +115,7 @@ class UIController:
         self.ui_state = ui_state if ui_state is not None else UIState()
         self.original_window_title: str = ""
         
-        QgsMessageLog.logMessage(
-            "UIController初期化完了",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("UIController初期化完了")
     
     def initialize(self) -> None:
         """
@@ -132,18 +128,10 @@ class UIController:
             # カスタムツールバー作成
             self._create_custom_toolbar()
             
-            QgsMessageLog.logMessage(
-                "UIController初期化処理完了",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("UIController初期化処理完了")
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"UIController初期化処理エラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"UIController初期化処理エラー: {str(e)}")
             raise
     
     def enable_custom_mode(self) -> None:
@@ -164,19 +152,11 @@ class UIController:
             - 既にカスタムモードの場合は何もしない
         """
         if self.is_custom_mode:
-            QgsMessageLog.logMessage(
-                "既にカスタムモードです",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("既にカスタムモードです")
             return
         
         try:
-            QgsMessageLog.logMessage(
-                "カスタムモード有効化開始",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("カスタムモード有効化開始")
             
             # 1. UI状態を保存
             self.ui_state.save_from_main_window(self.main_window)
@@ -203,18 +183,10 @@ class UIController:
             
             self.is_custom_mode = True
             
-            QgsMessageLog.logMessage(
-                "カスタムモード有効化完了",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("カスタムモード有効化完了")
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"カスタムモード有効化エラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"カスタムモード有効化エラー: {str(e)}")
             raise
     
     def disable_custom_mode(self) -> None:
@@ -233,19 +205,11 @@ class UIController:
             カスタムモードでない場合は何もしない
         """
         if not self.is_custom_mode:
-            QgsMessageLog.logMessage(
-                "カスタムモードではありません",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("カスタムモードではありません")
             return
         
         try:
-            QgsMessageLog.logMessage(
-                "カスタムモード無効化開始",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("カスタムモード無効化開始")
             
             # 1. カスタムツールバーを非表示
             if self.custom_toolbar:
@@ -277,18 +241,10 @@ class UIController:
             
             self.is_custom_mode = False
             
-            QgsMessageLog.logMessage(
-                "カスタムモード無効化完了",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("カスタムモード無効化完了")
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"カスタムモード無効化エラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Critical
-            )
+            Logger.error(f"カスタムモード無効化エラー: {str(e)}")
             raise
     
     def is_in_custom_mode(self) -> bool:
@@ -330,18 +286,10 @@ class UIController:
                 self.custom_toolbar.deleteLater()
                 self.custom_toolbar = None
             
-            QgsMessageLog.logMessage(
-                "UIControllerクリーンアップ完了",
-                "PoleFacility",
-                Qgis.Info
-            )
+            Logger.info("UIControllerクリーンアップ完了")
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"UIControllerクリーンアップエラー: {str(e)}",
-                "PoleFacility",
-                Qgis.Warning
-            )
+            Logger.warning(f"UIControllerクリーンアップエラー: {str(e)}")
     
     def _hide_qgis_toolbars(self) -> None:
         """QGIS標準ツールバーを非表示にする。"""
@@ -355,11 +303,7 @@ class UIController:
                 toolbar.hide()
                 self.hidden_toolbars.append(toolbar)
         
-        QgsMessageLog.logMessage(
-            f"ツールバー非表示: {len(self.hidden_toolbars)}個",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info(f"ツールバー非表示: {len(self.hidden_toolbars)}個")
     
     def _hide_qgis_menus(self) -> None:
         """QGIS標準メニューバーを非表示にする。"""
@@ -367,11 +311,7 @@ class UIController:
         if menu_bar:
             menu_bar.hide()
         
-        QgsMessageLog.logMessage(
-            "メニューバー非表示",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("メニューバー非表示")
     
     def _hide_qgis_dock_widgets(self) -> None:
         """不要なドックウィジェットを非表示にする。"""
@@ -386,11 +326,7 @@ class UIController:
                 dock.hide()
                 self.hidden_dock_widgets.append(dock)
         
-        QgsMessageLog.logMessage(
-            f"ドックウィジェット非表示: {len(self.hidden_dock_widgets)}個",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info(f"ドックウィジェット非表示: {len(self.hidden_dock_widgets)}個")
     
     def _hide_status_bar(self) -> None:
         """ステータスバーを非表示にする。"""
@@ -398,11 +334,7 @@ class UIController:
         if status_bar:
             status_bar.hide()
         
-        QgsMessageLog.logMessage(
-            "ステータスバー非表示",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("ステータスバー非表示")
     
     def _restore_qgis_toolbars(self) -> None:
         """QGIS標準ツールバーを復元する。"""
@@ -410,17 +342,9 @@ class UIController:
             try:
                 toolbar.show()
             except Exception as e:
-                QgsMessageLog.logMessage(
-                    f"ツールバー復元エラー: {toolbar.objectName()} - {str(e)}",
-                    "PoleFacility",
-                    Qgis.Warning
-                )
+                Logger.warning(f"ツールバー復元エラー: {toolbar.objectName()} - {str(e)}")
         
-        QgsMessageLog.logMessage(
-            f"ツールバー復元: {len(self.hidden_toolbars)}個",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info(f"ツールバー復元: {len(self.hidden_toolbars)}個")
     
     def _restore_qgis_menus(self) -> None:
         """QGIS標準メニューバーを復元する。"""
@@ -428,11 +352,7 @@ class UIController:
         if menu_bar:
             menu_bar.show()
         
-        QgsMessageLog.logMessage(
-            "メニューバー復元",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("メニューバー復元")
     
     def _restore_qgis_dock_widgets(self) -> None:
         """ドックウィジェットを復元する。"""
@@ -440,17 +360,9 @@ class UIController:
             try:
                 dock.show()
             except Exception as e:
-                QgsMessageLog.logMessage(
-                    f"ドック復元エラー: {dock.objectName()} - {str(e)}",
-                    "PoleFacility",
-                    Qgis.Warning
-                )
+                Logger.warning(f"ドック復元エラー: {dock.objectName()} - {str(e)}")
         
-        QgsMessageLog.logMessage(
-            f"ドックウィジェット復元: {len(self.hidden_dock_widgets)}個",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info(f"ドックウィジェット復元: {len(self.hidden_dock_widgets)}個")
     
     def _restore_status_bar(self) -> None:
         """ステータスバーを復元する。"""
@@ -458,11 +370,7 @@ class UIController:
         if status_bar:
             status_bar.show()
         
-        QgsMessageLog.logMessage(
-            "ステータスバー復元",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("ステータスバー復元")
     
     def _create_custom_toolbar(self) -> CustomToolbarWidget:
         """
@@ -482,11 +390,7 @@ class UIController:
         # 初期状態は非表示
         self.custom_toolbar.hide()
         
-        QgsMessageLog.logMessage(
-            "カスタムツールバー作成完了",
-            "PoleFacility",
-            Qgis.Info
-        )
+        Logger.info("カスタムツールバー作成完了")
         
         return self.custom_toolbar
     
