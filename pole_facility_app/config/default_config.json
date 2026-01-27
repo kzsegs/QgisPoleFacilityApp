@@ -37,7 +37,7 @@
     "enable_logging": true,
     "log_level": "INFO",
     "log_to_file": false,
-    "log_file_path": ""
+    "log_directory": ""
   },
   "window_positions": {
     "basic": {

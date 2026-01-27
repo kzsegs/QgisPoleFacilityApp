@@ -214,6 +214,10 @@ class SettingsDialogWidget(QDialog):
             # current_configも更新
             self.current_config = merged_config
             
+            # Logger を再構成（デバッグ設定変更時のため）
+            from ..utils.logger import Logger
+            Logger.configure(self.config_manager, force_reconfigure=True)
+            
             # イベント発行
             EventBus.get_instance().emit(EventNames.CONFIG_CHANGED, {})
             
@@ -324,6 +328,10 @@ class SettingsDialogWidget(QDialog):
             # 各タブをリロード
             self.basic_settings_tab._load_values()
             self.debug_settings_tab._load_values()
+            
+            # Logger を再構成（デバッグ設定がインポートされたため）
+            from ..utils.logger import Logger
+            Logger.configure(self.config_manager, force_reconfigure=True)
             
             QMessageBox.information(
                 self,

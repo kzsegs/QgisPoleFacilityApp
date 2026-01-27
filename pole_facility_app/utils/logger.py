@@ -1,11 +1,19 @@
 """
-Logger - ログユーティリティ
+Logger - ログユーティリティ（v1.9.1改訂）
 
 QGISメッセージログと連携したアプリケーション用ロガー。
 全てのログメッセージは "PoleFacility" タグで出力される。
+
+v1.9.1変更点:
+    - ファイル出力機能追加
+    - configure()メソッド追加
+    - 設定に基づくログレベル制御
+    - cleanup()メソッド追加
 """
 
+import os
 import traceback
+from datetime import datetime
 from typing import Optional
 
 
@@ -13,18 +21,177 @@ class Logger:
     """
     アプリケーション用ロガー。QGISメッセージログと連携。
     
+    v1.9.1新機能:
+        - ファイル出力対応
+        - 設定ベースの制御
+        - ログレベルフィルタリング
+    
     全てのメソッドはクラスメソッドとして提供され、
     インスタンス化せずに使用可能。
     
     Example:
-        from pole_facility_app.utils import Logger
+        # プラグイン起動時
+        Logger.configure(config_manager)
         
+        # ログ出力
         Logger.info("データをインポートしました")
         Logger.warning("未保存の変更があります")
         Logger.error("ファイルが見つかりません", FileNotFoundError("test.csv"))
+        
+        # プラグイン終了時
+        Logger.cleanup()
     """
     
     TAG = "PoleFacility"
+    
+    # クラス変数
+    _log_file = None
+    _log_to_file = False
+    _log_directory = ""
+    _log_level = "INFO"
+    _initialized = False
+    
+    # ログレベル定義
+    LOG_LEVELS = {
+        "DEBUG": 0,
+        "INFO": 1,
+        "WARNING": 2,
+        "ERROR": 3,
+        "CRITICAL": 4
+    }
+    
+    @classmethod
+    def configure(cls, config_manager, force_reconfigure: bool = False) -> None:
+        """
+        設定を読み込んでロガーを構成する。
+        
+        Args:
+            config_manager: ConfigManagerインスタンス
+            force_reconfigure: 強制的に再構成する（設定変更時に使用）
+        
+        Note:
+            Plugin.initGui()内で、ConfigManager初期化直後に呼び出すこと。
+            設定変更時は force_reconfigure=True で呼び出すと再構成される。
+        
+        Example:
+            # 初回初期化
+            def initGui(self):
+                self.config_manager = ConfigManager.get_instance()
+                Logger.configure(self.config_manager)
+            
+            # 設定変更時
+            def on_settings_changed(self):
+                Logger.configure(self.config_manager, force_reconfigure=True)
+        """
+        if cls._initialized and not force_reconfigure:
+            return
+        
+        # 既存のログファイルを閉じる（再構成時）
+        if force_reconfigure and cls._log_file is not None:
+            try:
+                cls._write_to_file("INFO", "=== 設定変更により再構成 ===")
+                cls._log_file.close()
+            except Exception:
+                pass
+            cls._log_file = None
+        
+        debug_config = config_manager.get("debug", {})
+        cls._log_to_file = debug_config.get("log_to_file", False)
+        cls._log_directory = debug_config.get("log_directory", "")
+        cls._log_level = debug_config.get("log_level", "INFO")
+        
+        if cls._log_to_file and cls._log_directory:
+            cls._initialize_log_file()
+        elif not cls._log_to_file and cls._log_file is not None:
+            # ファイル出力無効化時はファイルを閉じる
+            try:
+                cls._write_to_file("INFO", "=== ファイル出力を無効化 ===")
+                cls._log_file.close()
+            except Exception:
+                pass
+            cls._log_file = None
+        
+        cls._initialized = True
+    
+    @classmethod
+    def _initialize_log_file(cls) -> None:
+        """
+        ログファイルを初期化する。
+        
+        ファイル名: pole_facility_YYYYMMDD_HHMMSS.log
+        エンコーディング: UTF-8
+        
+        Note:
+            ディレクトリが存在しない場合は自動作成する。
+            ファイル作成に失敗した場合はログファイルをNoneにし、
+            QGISログのみに出力する。
+        """
+        try:
+            if not os.path.exists(cls._log_directory):
+                os.makedirs(cls._log_directory)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"pole_facility_{timestamp}.log"
+            filepath = os.path.join(cls._log_directory, filename)
+            
+            cls._log_file = open(filepath, 'w', encoding='utf-8')
+            cls._write_to_file("INFO", f"=== ログ開始: {filepath} ===")
+            
+        except Exception as e:
+            cls._log_file = None
+            # ファイル作成失敗はQGISログのみに記録
+            try:
+                from qgis.core import QgsMessageLog, Qgis
+                QgsMessageLog.logMessage(
+                    f"ログファイルの作成に失敗しました: {str(e)}",
+                    cls.TAG, Qgis.Warning
+                )
+            except ImportError:
+                print(f"[WARNING] {cls.TAG}: ログファイルの作成に失敗しました: {str(e)}")
+    
+    @classmethod
+    def _write_to_file(cls, level: str, message: str) -> None:
+        """
+        ファイルにログを書き込む。
+        
+        Args:
+            level: ログレベル（DEBUG/INFO/WARNING/ERROR/EXCEPTION）
+            message: ログメッセージ
+        
+        フォーマット: [YYYY-MM-DD HH:MM:SS] [LEVEL] message
+        
+        Note:
+            flush()を即時実行してクラッシュ時もログを保持する。
+        """
+        if cls._log_file is None:
+            return
+        
+        try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cls._log_file.write(f"[{timestamp}] [{level}] {message}\n")
+            cls._log_file.flush()  # 即時書き込み
+        except Exception:
+            # ファイル書き込みエラーは無視（QGISログは残る）
+            pass
+    
+    @classmethod
+    def _should_log(cls, level: str) -> bool:
+        """
+        ログレベルフィルタリング。
+        
+        Args:
+            level: メッセージのログレベル
+        
+        Returns:
+            bool: 出力すべき場合True
+        
+        Note:
+            設定されたログレベル以上のメッセージのみ出力する。
+            例: log_level="WARNING"の場合、WARNING/ERROR/CRITICALのみ出力
+        """
+        current_level = cls.LOG_LEVELS.get(cls._log_level, 1)
+        message_level = cls.LOG_LEVELS.get(level, 1)
+        return message_level >= current_level
     
     @classmethod
     def debug(cls, message: str) -> None:
@@ -35,17 +202,14 @@ class Logger:
             message: デバッグメッセージ
         
         Note:
-            開発時のトレース用。本番環境では出力が抑制される場合あり。
+            v1.9.1: log_to_fileが有効な場合のみファイル出力
+            QGISログには出力しない（ファイルのみ）
         
         Example:
             Logger.debug("変数の値: x=10, y=20")
         """
-        try:
-            from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(message, cls.TAG, Qgis.Info)
-        except ImportError:
-            # QGIS環境外（テスト等）での実行時
-            print(f"[DEBUG] {cls.TAG}: {message}")
+        if cls._should_log("DEBUG") and cls._log_to_file:
+            cls._write_to_file("DEBUG", message)
     
     @classmethod
     def info(cls, message: str) -> None:
@@ -56,17 +220,23 @@ class Logger:
             message: 情報メッセージ
         
         Note:
-            正常な処理の進行状況を記録。
+            v1.9.1: ログレベルチェック追加、ファイル出力追加
         
         Example:
             Logger.info("CSVファイルをインポートしました")
             Logger.info("設定を保存しました")
         """
+        if not cls._should_log("INFO"):
+            return
+        
         try:
             from qgis.core import QgsMessageLog, Qgis
             QgsMessageLog.logMessage(message, cls.TAG, Qgis.Info)
         except ImportError:
             print(f"[INFO] {cls.TAG}: {message}")
+        
+        if cls._log_to_file:
+            cls._write_to_file("INFO", message)
     
     @classmethod
     def warning(cls, message: str) -> None:
@@ -77,7 +247,7 @@ class Logger:
             message: 警告メッセージ
         
         Note:
-            注意が必要だが処理は続行可能な状況で使用。
+            v1.9.1: ファイル出力追加
         
         Example:
             Logger.warning("写真ファイルが見つかりません: photo.jpg")
@@ -88,6 +258,9 @@ class Logger:
             QgsMessageLog.logMessage(message, cls.TAG, Qgis.Warning)
         except ImportError:
             print(f"[WARNING] {cls.TAG}: {message}")
+        
+        if cls._log_to_file:
+            cls._write_to_file("WARNING", message)
     
     @classmethod
     def error(cls, message: str, exception: Optional[Exception] = None) -> None:
@@ -99,7 +272,7 @@ class Logger:
             exception: 例外オブジェクト（オプション）
         
         Note:
-            処理が失敗した場合に使用。例外情報があれば併せて出力。
+            v1.9.1: ファイル出力追加
         
         Example:
             Logger.error("ファイルの読み込みに失敗しました")
@@ -113,6 +286,9 @@ class Logger:
             QgsMessageLog.logMessage(message, cls.TAG, Qgis.Critical)
         except ImportError:
             print(f"[ERROR] {cls.TAG}: {message}")
+        
+        if cls._log_to_file:
+            cls._write_to_file("ERROR", message)
     
     @classmethod
     def exception(cls, message: str) -> None:
@@ -123,6 +299,7 @@ class Logger:
             message: エラーメッセージ
         
         Note:
+            v1.9.1: 新規追加
             例外が発生したコンテキストで呼び出す。
             スタックトレースが自動的に取得され、メッセージに追加される。
         
@@ -140,6 +317,9 @@ class Logger:
             QgsMessageLog.logMessage(full_message, cls.TAG, Qgis.Critical)
         except ImportError:
             print(f"[EXCEPTION] {cls.TAG}: {full_message}")
+        
+        if cls._log_to_file:
+            cls._write_to_file("EXCEPTION", full_message)
     
     @classmethod
     def critical(cls, message: str, exception: Optional[Exception] = None) -> None:
@@ -158,6 +338,31 @@ class Logger:
             Logger.critical("データベースが破損しています")
         """
         cls.error(message, exception)
+    
+    @classmethod
+    def cleanup(cls) -> None:
+        """
+        ログファイルをクローズする。
+        
+        Note:
+            v1.9.1: 新規追加
+            プラグイン終了時（Plugin.unload()またはUIController._do_exit()）
+            に呼び出すこと。
+        
+        Example:
+            def unload(self):
+                Logger.cleanup()
+                # その他のクリーンアップ処理
+        """
+        if cls._log_file is not None:
+            try:
+                cls._write_to_file("INFO", "=== ログ終了 ===")
+                cls._log_file.close()
+            except Exception:
+                pass
+            cls._log_file = None
+        
+        cls._initialized = False
 
 
 class LogContext:

@@ -29,7 +29,7 @@ class DebugSettingsTab(QWidget):
         enable_logging_checkbox: ログ出力有効化チェックボックス
         log_level_radio_group: ログレベルラジオボタングループ
         log_to_file_checkbox: ファイル出力チェックボックス
-        log_file_path_edit: ログファイルパス入力
+        log_file_path_edit: ログディレクトリパス入力
     """
     
     def __init__(self, schema: dict, config: dict, parent=None):
@@ -103,7 +103,7 @@ class DebugSettingsTab(QWidget):
         log_layout.addLayout(log_dir_layout)
         
         # 補足説明
-        log_file_note = QLabel("※ ログファイル名: pole_facility_YYYYMMDD.log（日付自動付与）")
+        log_file_note = QLabel("※ ログファイル名: pole_facility_YYYYMMDD_HHMMSS.log（日時自動付与）")
         log_file_note.setStyleSheet("color: #666; font-size: 10px;")
         log_layout.addWidget(log_file_note)
         
@@ -146,9 +146,9 @@ class DebugSettingsTab(QWidget):
             debug.get('log_to_file', False)
         )
         
-        # ログファイルパス
+        # ログディレクトリパス（v1.9.1修正：log_file_path → log_directory）
         self.log_file_path_edit.setText(
-            debug.get('log_file_path', '')
+            debug.get('log_directory', '')
         )
     
     def _on_browse_log_dir_clicked(self) -> None:
@@ -177,12 +177,13 @@ class DebugSettingsTab(QWidget):
                 log_level = level
                 break
         
+        # v1.9.1修正：log_file_path → log_directory
         return {
             "debug": {
                 "enable_logging": self.enable_logging_checkbox.isChecked(),
                 "log_level": log_level,
                 "log_to_file": self.log_to_file_checkbox.isChecked(),
-                "log_file_path": self.log_file_path_edit.text()
+                "log_directory": self.log_file_path_edit.text()
             }
         }
     
@@ -194,6 +195,6 @@ class DebugSettingsTab(QWidget):
             True（常に成功）
         
         Note:
-            ログファイルパスが空でも問題ないため、常にTrueを返す
+            ログディレクトリパスが空でも問題ないため、常にTrueを返す
         """
         return True

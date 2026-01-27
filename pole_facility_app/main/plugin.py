@@ -207,8 +207,9 @@ class PoleFacilityMain:
             self.event_bus = EventBus.get_instance()
             self.config_manager = ConfigManager.get_instance()
             
-            # ConfigManager を初期化（設定ファイル読み込み）
-#            self.config_manager.initialize(event_bus=self.event_bus)
+            # Logger を初期化（ConfigManagerに依存） - v1.9.1追加
+            from ..utils.logger import Logger
+            Logger.configure(self.config_manager)
             
             # 写真ウィジェットを登録
             PhotoWidgetFactory.register_widgets()
@@ -312,10 +313,11 @@ class PoleFacilityMain:
             # 終了ボタン
             toolbar.exit_clicked.connect(self.exit_custom_mode)
         
-        # イベントバス接続
-        self.event_bus.subscribe("data.imported", self._on_data_imported)
-        self.event_bus.subscribe("data.saved", self._on_data_saved)
-        self.event_bus.subscribe("data.exported", self._on_data_exported)
+        # データマネージャーのイベント購読
+        if self.event_bus:
+            self.event_bus.subscribe('data.imported', self._on_data_imported)
+            self.event_bus.subscribe('data.saved', self._on_data_saved)
+            self.event_bus.subscribe('data.exported', self._on_data_exported)
 
     def _on_import_clicked(self):
         """
@@ -622,6 +624,10 @@ class PoleFacilityMain:
                     action
                 )
                 self.iface.removeToolBarIcon(action)
+            
+            # Logger をクリーンアップ - v1.9.1追加
+            from ..utils.logger import Logger
+            Logger.cleanup()
             
             # シングルトンをクリア
             EventBus.clear_instance()
