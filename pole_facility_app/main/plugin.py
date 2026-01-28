@@ -249,7 +249,8 @@ class PoleFacilityMain:
             # データマネージャーを初期化
             self.data_manager = DataManager(
                 self.iface,
-                self.event_bus
+                self.event_bus,
+                self.config_manager
             )
             
             # ナビゲーションコントローラーを初期化

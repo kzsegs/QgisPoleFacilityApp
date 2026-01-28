@@ -201,12 +201,13 @@ class DataManager:
     
     # ========== 既存メソッド ==========
     
-    def import_csv(self, csv_path: str) -> bool:
+    def import_csv(self, csv_path: str, show_zoom_dialog: bool = True) -> bool:
         """
         CSVファイルをインポートしてレイヤとして表示する（v1.9.1改訂）。
         
         Args:
             csv_path: CSVファイルのパス
+            show_zoom_dialog: ズーム確認ダイアログを表示するか（デフォルト: True）
         
         Returns:
             bool: インポート成功時True
@@ -221,8 +222,9 @@ class DataManager:
             4. _create_layer_from_data()でレイヤ作成
             5. _setup_layer_style()でスタイル設定
             6. _add_layer_to_project()でプロジェクトに追加
-            7. data.importedイベント発行
-            8. ConfigManager.reload()で設定再読み込み（v1.9.1追加）
+            7. ズーム確認ダイアログ表示（v1.9.1追加）
+            8. data.importedイベント発行
+            9. ConfigManager.reload()で設定再読み込み（v1.9.1追加）
         """
         try:
             Logger.info(f"CSVインポート開始: {csv_path}")
@@ -265,8 +267,9 @@ class DataManager:
             # 6. プロジェクトに追加
             self._add_layer_to_project(layer)
             
-            # 7. 地図の表示範囲を調整
-            self._zoom_to_layer(layer)
+            # 7. ズーム確認ダイアログ表示（v1.9.1追加）
+            if show_zoom_dialog:
+                self._show_zoom_confirmation(layer)
             
             # 状態更新
             self.current_layer = layer
@@ -782,6 +785,32 @@ class DataManager:
         except Exception as e:
             Logger.error(f"❌ 写真ウィジェット設定の修正エラー: {str(e)}")
             return False
+    
+    def _show_zoom_confirmation(self, layer: QgsVectorLayer) -> None:
+        """
+        ズーム確認ダイアログを表示（v1.9.1追加）
+        
+        Args:
+            layer: インポートされたレイヤ
+        
+        処理:
+            インポート件数を表示し、ズームするか確認する
+            「はい」の場合は _zoom_to_layer() を実行
+        """
+        feature_count = layer.featureCount()
+        
+        reply = QMessageBox.question(
+            self.iface.mainWindow(),
+            "インポート完了",
+            f"CSVファイルをインポートしました。\n"
+            f"{feature_count}件のデータを読み込みました。\n\n"
+            f"インポートしたデータの範囲にズームしますか？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        
+        if reply == QMessageBox.Yes:
+            self._zoom_to_layer(layer)
     
     def _add_layer_to_project(self, layer: QgsVectorLayer) -> None:
         """
