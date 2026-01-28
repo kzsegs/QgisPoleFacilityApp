@@ -47,7 +47,7 @@ class BasicAttributeDialog(QDialog):
     
     def __init__(self, config_manager, data_manager, parent=None):
         """
-        初期化
+        初期化（v1.9.1改訂）
         
         Args:
             config_manager: ConfigManager インスタンス
@@ -66,6 +66,9 @@ class BasicAttributeDialog(QDialog):
         
         # フィールド設定
         self._fields_config = []
+        
+        # v1.9.1追加: 移動・リサイズイベントの遅延タイマー
+        self._save_timer = None
         
         self._setup_window()
         self._load_field_config()
@@ -346,6 +349,81 @@ class BasicAttributeDialog(QDialog):
         
         self.closed.emit()
         super().closeEvent(event)
+    
+    def moveEvent(self, event):
+        """
+        ウィンドウ移動イベント（v1.9.1追加）
+        
+        Args:
+            event: QMoveEvent
+        
+        処理:
+            移動後500ms経過したら座標を保存（連続移動時の過剰保存を防ぐ）
+        """
+        super().moveEvent(event)
+        self._schedule_save_position()
+    
+    def resizeEvent(self, event):
+        """
+        ウィンドウリサイズイベント（v1.9.1追加）
+        
+        Args:
+            event: QResizeEvent
+        
+        処理:
+            リサイズ後500ms経過したらサイズを保存（連続リサイズ時の過剰保存を防ぐ）
+        """
+        super().resizeEvent(event)
+        self._schedule_save_position()
+    
+    def _schedule_save_position(self):
+        """
+        座標保存をスケジュール（v1.9.1追加）
+        
+        処理:
+            既存のタイマーをキャンセルして新しいタイマーを開始
+            500ms後に _save_current_position() を実行
+        """
+        from PyQt5.QtCore import QTimer
+        
+        # 既存タイマーをキャンセル
+        if self._save_timer is not None:
+            self._save_timer.stop()
+            self._save_timer.deleteLater()
+        
+        # 新しいタイマーを開始
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.timeout.connect(self._save_current_position)
+        self._save_timer.start(500)  # 500ms後に実行
+    
+    def _save_current_position(self):
+        """
+        現在のウィンドウ位置・サイズを保存（v1.9.1追加）
+        
+        処理:
+            ConfigManager.save_window_position() を呼び出して即座に保存
+        """
+        from PyQt5.QtWidgets import QApplication
+        
+        if self._config_manager is None:
+            return
+        
+        try:
+            screen = QApplication.desktop().screenNumber(self)
+            pos = self.pos()
+            size = self.size()
+            
+            self._config_manager.save_window_position(
+                'basic',
+                screen,
+                pos.x(),
+                pos.y(),
+                size.width(),
+                size.height()
+            )
+        except Exception:
+            pass
     
     def get_values(self) -> dict:
         """

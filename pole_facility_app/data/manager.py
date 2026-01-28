@@ -203,7 +203,7 @@ class DataManager:
     
     def import_csv(self, csv_path: str) -> bool:
         """
-        CSVファイルをインポートしてレイヤとして表示する。
+        CSVファイルをインポートしてレイヤとして表示する（v1.9.1改訂）。
         
         Args:
             csv_path: CSVファイルのパス
@@ -222,6 +222,7 @@ class DataManager:
             5. _setup_layer_style()でスタイル設定
             6. _add_layer_to_project()でプロジェクトに追加
             7. data.importedイベント発行
+            8. ConfigManager.reload()で設定再読み込み（v1.9.1追加）
         """
         try:
             Logger.info(f"CSVインポート開始: {csv_path}")
@@ -281,6 +282,11 @@ class DataManager:
             })
             
             Logger.info(f"CSVインポート完了: {layer.featureCount()}件")
+            
+            # 9. ConfigManager.reload()で設定再読み込み（v1.9.1追加）
+            if self.config_manager:
+                self.config_manager.reload()
+                Logger.info("ConfigManager - 設定を再読み込みしました（CSVインポート後）")
             
             return True
             

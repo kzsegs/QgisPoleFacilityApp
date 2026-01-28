@@ -65,7 +65,7 @@ class InspectionFormDialog(QDialog):
     
     def __init__(self, config_manager, data_manager, parent=None):
         """
-        初期化
+        初期化（v1.9.1改訂）
         
         Args:
             config_manager: ConfigManager インスタンス
@@ -84,6 +84,9 @@ class InspectionFormDialog(QDialog):
         
         # セクション設定
         self._sections_config = []
+        
+        # v1.9.1追加: 移動・リサイズイベントの遅延タイマー
+        self._save_timer = None
         
         self._setup_window()
         self._load_sections_config()
@@ -681,6 +684,45 @@ class InspectionFormDialog(QDialog):
         
         self.closed.emit()
         super().closeEvent(event)
+    
+    def moveEvent(self, event):
+        """ウィンドウ移動イベント（v1.9.1追加）"""
+        super().moveEvent(event)
+        self._schedule_save_position()
+    
+    def resizeEvent(self, event):
+        """ウィンドウリサイズイベント（v1.9.1追加）"""
+        super().resizeEvent(event)
+        self._schedule_save_position()
+    
+    def _schedule_save_position(self):
+        """座標保存をスケジュール（v1.9.1追加）"""
+        if self._save_timer is not None:
+            self._save_timer.stop()
+            self._save_timer.deleteLater()
+        
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.timeout.connect(self._save_current_position)
+        self._save_timer.start(500)
+    
+    def _save_current_position(self):
+        """現在のウィンドウ位置・サイズを保存（v1.9.1追加）"""
+        from PyQt5.QtWidgets import QApplication
+        
+        if self._config_manager is None:
+            return
+        
+        try:
+            screen = QApplication.desktop().screenNumber(self)
+            pos = self.pos()
+            size = self.size()
+            
+            self._config_manager.save_window_position(
+                'inspection', screen, pos.x(), pos.y(), size.width(), size.height()
+            )
+        except Exception:
+            pass
     
     def get_values(self) -> dict:
         """

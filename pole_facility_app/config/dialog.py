@@ -42,7 +42,7 @@ class SettingsDialogWidget(QDialog):
     
     def __init__(self, parent=None):
         """
-        コンストラクタ
+        コンストラクタ（v1.9.1改訂）
         
         Args:
             parent: 親ウィジェット
@@ -56,6 +56,14 @@ class SettingsDialogWidget(QDialog):
         self.setWindowTitle("設定")
         self.setModal(True)
         self.resize(700, 600)
+        
+        # v1.9.1追加: 設定画面を開く前に最新の設定をリロード
+        self.config_manager.reload()
+        QgsMessageLog.logMessage(
+            "SettingsDialogWidget - 最新の設定を読み込みました",
+            "PoleFacility",
+            Qgis.Info
+        )
         
         # 先に設定を読み込んでからUIを作成
         self._load_current_config()

@@ -126,7 +126,10 @@ class WindowPositionTab(QWidget):
         return group
     
     def _load_positions(self) -> None:
-        """現在の位置情報を表示"""
+        """現在の位置情報を表示（v1.9.1改訂）"""
+        # v1.9.1追加: 表示前に最新の設定を読み込む
+        self.config_manager.reload()
+        
         for dialog_type in ['basic', 'photo', 'inspection']:
             position = self.config_manager.get_window_position(dialog_type)
             
@@ -141,6 +144,11 @@ class WindowPositionTab(QWidget):
                 self.position_labels[dialog_type].setText(text)
             else:
                 self.position_labels[dialog_type].setText("未設定")
+        
+        QgsMessageLog.logMessage(
+            "WindowPositionTab - 位置情報を更新しました",
+            "PoleFacility", Qgis.Info
+        )
     
     def _on_export_clicked(self) -> None:
         """エクスポートボタンクリック"""
