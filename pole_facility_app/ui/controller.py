@@ -384,6 +384,9 @@ class UIController:
             self.event_bus
         )
         
+        # OSMボタンのシグナル接続（v1.9.1追加）
+        self.custom_toolbar.osm_clicked.connect(self._on_osm_clicked)
+        
         # メインウィンドウに追加
         self.main_window.addToolBar(self.custom_toolbar)
         
@@ -393,6 +396,48 @@ class UIController:
         Logger.info("カスタムツールバー作成完了")
         
         return self.custom_toolbar
+    
+    def _on_osm_clicked(self) -> None:
+        """
+        OSM地図表示ボタンクリック時の処理（v1.9.1追加）。
+        
+        処理内容:
+            1. OSMHelperを使用してOSMレイヤーを追加
+            2. 既に存在する場合はメッセージバーで通知
+            3. 追加成功時はログ出力
+        """
+        from ..utils.osm_helper import OSMHelper
+        from qgis.core import Qgis
+        
+        # OSMレイヤー追加
+        layer = OSMHelper.add_osm_layer()
+        
+        if layer is None and OSMHelper.is_osm_layer_exists():
+            # 既に存在する場合
+            self.iface.messageBar().pushMessage(
+                "情報",
+                "OSM背景地図は既に表示されています",
+                level=Qgis.Info,
+                duration=3
+            )
+        elif layer is not None:
+            # 追加成功
+            self.iface.messageBar().pushMessage(
+                "成功",
+                "OSM背景地図を追加しました",
+                level=Qgis.Success,
+                duration=3
+            )
+            Logger.info("OSM背景地図を追加")
+        else:
+            # 追加失敗
+            self.iface.messageBar().pushMessage(
+                "エラー",
+                "OSM背景地図の追加に失敗しました",
+                level=Qgis.Critical,
+                duration=5
+            )
+            Logger.error("OSM背景地図の追加に失敗")
     
     def _get_allowed_dock_widgets(self) -> List[str]:
         """

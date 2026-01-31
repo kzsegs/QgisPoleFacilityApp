@@ -49,6 +49,7 @@ class CustomToolbarWidget(QToolBar):
     export_clicked = pyqtSignal()
     select_clicked = pyqtSignal(bool)  # ★修正: bool引数を追加（checked状態を渡す）
     search_clicked = pyqtSignal()
+    osm_clicked = pyqtSignal()  # v1.9.1追加: OSM地図表示
     settings_clicked = pyqtSignal()
     exit_clicked = pyqtSignal()
     
@@ -70,6 +71,7 @@ class CustomToolbarWidget(QToolBar):
         self.export_action: Optional[QAction] = None
         self.select_action: Optional[QAction] = None  # 選択アクション追加
         self.search_action: Optional[QAction] = None
+        self.osm_action: Optional[QAction] = None  # v1.9.1追加: OSM地図表示
         self.settings_action: Optional[QAction] = None
         self.exit_action: Optional[QAction] = None
         
@@ -82,7 +84,7 @@ class CustomToolbarWidget(QToolBar):
         self.update_button_states(has_data=False)
         
         QgsMessageLog.logMessage(
-            "CustomToolbarWidget初期化完了（全7ボタン）",
+            "CustomToolbarWidget初期化完了（全8ボタン）",
             "PoleFacility",
             Qgis.Info
         )
@@ -158,6 +160,18 @@ class CustomToolbarWidget(QToolBar):
         # セパレータ
         self.addSeparator()
         
+        # OSM地図表示ボタン（v1.9.1追加）
+        self.osm_action = self._create_action(
+            "🗺️",
+            "OSM地図",
+            "OpenStreetMap背景地図を追加",
+            ""
+        )
+        self.addAction(self.osm_action)
+        
+        # セパレータ
+        self.addSeparator()
+        
         # 設定ボタン
         self.settings_action = self._create_action(
             "⚙️",
@@ -177,7 +191,7 @@ class CustomToolbarWidget(QToolBar):
         self.addAction(self.exit_action)
         
         QgsMessageLog.logMessage(
-            "ツールバーアクション設定完了（全7ボタン）",
+            "ツールバーアクション設定完了（全8ボタン）",
             "PoleFacility",
             Qgis.Info
         )
@@ -233,6 +247,9 @@ class CustomToolbarWidget(QToolBar):
         if self.search_action:
             self.search_action.triggered.connect(self._on_search_clicked)
         
+        if self.osm_action:
+            self.osm_action.triggered.connect(self._on_osm_clicked)
+        
         if self.settings_action:
             self.settings_action.triggered.connect(self._on_settings_clicked)
         
@@ -266,9 +283,12 @@ class CustomToolbarWidget(QToolBar):
         if self.search_action:
             self.search_action.setEnabled(has_data)
         
-        # インポート、設定、終了は常に有効
+        # インポート、OSM地図、設定、終了は常に有効
         if self.import_action:
             self.import_action.setEnabled(True)
+        
+        if self.osm_action:
+            self.osm_action.setEnabled(True)
         
         if self.settings_action:
             self.settings_action.setEnabled(True)
@@ -405,6 +425,19 @@ class CustomToolbarWidget(QToolBar):
         
         # シグナル発行
         self.search_clicked.emit()
+    
+    def _on_osm_clicked(self) -> None:
+        """
+        OSM地図表示ボタンクリック時の処理（v1.9.1追加）。
+        """
+        QgsMessageLog.logMessage(
+            "OSM地図表示ボタンクリック",
+            "PoleFacility",
+            Qgis.Info
+        )
+        
+        # シグナル発行
+        self.osm_clicked.emit()
     
     def _on_settings_clicked(self) -> None:
         """

@@ -642,6 +642,9 @@ class MultiWindowFormManager(QObject):
                     dialog.move(x, y)
                     dialog.resize(width, height)
                     
+                    # コンフィグインポート時に位置を反映させるため表示
+                    dialog.show()
+                    
                     logger.debug(f"{dialog_type} dialog position restored: screen={screen} x={x} y={y} w={width} h={height}")
                     QgsMessageLog.logMessage(
                         f"MultiWindowFormManager - {dialog_type}ダイアログの位置を復元: screen={screen}",
