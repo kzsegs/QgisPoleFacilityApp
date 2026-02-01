@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qgis.core import QgsMessageLog, Qgis
 
-from .tabs import BasicSettingsTab, ColumnSettingsTab, DebugSettingsTab, WindowPositionTab
+from .tabs import BasicSettingsTab, ColumnSettingsTab, DebugSettingsTab, WindowPositionTab, StyleSettingsTab
 from ..config.manager import ConfigManager
 from ..main.event_bus import EventBus, EventNames
 
@@ -108,6 +108,13 @@ class SettingsDialogWidget(QDialog):
         self.window_position_tab = WindowPositionTab(self.config_manager, self)
         self.tab_widget.addTab(self.window_position_tab, "ウィンドウ位置")
         
+        # 地物スタイル設定タブ（v1.9.1追加）
+        self.style_settings_tab = StyleSettingsTab(
+            self.current_config,
+            self
+        )
+        self.tab_widget.addTab(self.style_settings_tab, "地物スタイル")
+        
         # デバッグ設定タブ
         self.debug_settings_tab = DebugSettingsTab(
             self.schema,
@@ -179,9 +186,14 @@ class SettingsDialogWidget(QDialog):
             self.tab_widget.setCurrentIndex(2)
             return False
         
+        # 地物スタイル設定タブ（v1.9.1追加）
+        if not self.style_settings_tab.validate():
+            self.tab_widget.setCurrentIndex(3)
+            return False
+        
         # デバッグ設定タブ
         if not self.debug_settings_tab.validate():
-            self.tab_widget.setCurrentIndex(3)
+            self.tab_widget.setCurrentIndex(4)
             return False
         
         return True
@@ -201,6 +213,7 @@ class SettingsDialogWidget(QDialog):
         # 値取得
         basic_values = self.basic_settings_tab.get_values()
         column_values = self.column_settings_tab.get_values()
+        style_values = self.style_settings_tab.get_values()  # v1.9.1追加
         debug_values = self.debug_settings_tab.get_values()
         
         # マージ
@@ -210,6 +223,9 @@ class SettingsDialogWidget(QDialog):
         merged_config['paths'] = basic_values['paths']
         merged_config['constants'] = basic_values['constants']
         merged_config['inspection_status'] = basic_values['inspection_status']
+        
+        # 地物スタイル設定（v1.9.1追加）
+        merged_config['progress_status'] = style_values['progress_status']
         
         # デバッグ設定
         merged_config['debug'] = debug_values['debug']
@@ -225,6 +241,11 @@ class SettingsDialogWidget(QDialog):
             # Logger を再構成（デバッグ設定変更時のため）
             from ..utils.logger import Logger
             Logger.configure(self.config_manager, force_reconfigure=True)
+            
+            # ProgressManager を再構成（v1.9.1追加）
+            from ..progress.progress_manager import ProgressManager
+            progress_mgr = ProgressManager.get_instance()
+            progress_mgr.configure(self.config_manager)
             
             # イベント発行
             EventBus.get_instance().emit(EventNames.CONFIG_CHANGED, {})
@@ -335,11 +356,17 @@ class SettingsDialogWidget(QDialog):
             
             # 各タブをリロード
             self.basic_settings_tab._load_values()
+            self.style_settings_tab._load_values()  # v1.9.1追加
             self.debug_settings_tab._load_values()
             
             # Logger を再構成（デバッグ設定がインポートされたため）
             from ..utils.logger import Logger
             Logger.configure(self.config_manager, force_reconfigure=True)
+            
+            # ProgressManager を再構成（v1.9.1追加）
+            from ..progress.progress_manager import ProgressManager
+            progress_mgr = ProgressManager.get_instance()
+            progress_mgr.configure(self.config_manager)
             
             QMessageBox.information(
                 self,

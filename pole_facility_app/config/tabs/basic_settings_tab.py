@@ -1,5 +1,5 @@
 """
-基本設定タブ - パス設定、定数設定、検査状態選択肢の編集
+基本設定タブ - パス設定、定数設定
 
 UI構成:
     ■ パス設定
@@ -7,16 +7,16 @@ UI構成:
       - エクスポート先デフォルトパス
     ■ 定数設定
       - 最大写真サイズ、CSV最大レコード数等
-    ■ 検査状態選択肢
-      - 検査状態1, 2, 3の選択肢編集
+
+Note:
+    検査状態選択肢はカラム設定タブで管理
 """
 
 from typing import Dict, Any, List
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLineEdit, QPushButton, QSpinBox,
-    QListWidget, QListWidgetItem, QFileDialog, QMessageBox,
-    QLabel, QInputDialog
+    QFileDialog, QMessageBox, QLabel
 )
 from PyQt5.QtCore import Qt
 from qgis.core import QgsMessageLog, Qgis
@@ -63,10 +63,6 @@ class BasicSettingsTab(QWidget):
         # 定数設定セクション
         constants_group = self._create_constants_section()
         layout.addWidget(constants_group)
-        
-        # 検査状態選択肢セクション
-        status_group = self._create_inspection_status_section()
-        layout.addWidget(status_group)
         
         layout.addStretch()
     
@@ -180,69 +176,6 @@ class BasicSettingsTab(QWidget):
         
         return group
     
-    def _create_inspection_status_section(self) -> QGroupBox:
-        """
-        検査状態選択肢セクション作成
-        
-        Returns:
-            QGroupBox
-        """
-        group = QGroupBox("検査状態選択肢")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(15)
-        
-        # 検査状態1, 2, 3
-        for i in [1, 2, 3]:
-            status_layout = self._create_status_list_widget(i)
-            layout.addLayout(status_layout)
-        
-        return group
-    
-    def _create_status_list_widget(self, status_index: int) -> QVBoxLayout:
-        """
-        検査状態リストウィジェット作成
-        
-        Args:
-            status_index: 検査状態インデックス（1, 2, 3）
-        
-        Returns:
-            QVBoxLayout
-        """
-        layout = QVBoxLayout()
-        
-        # ラベル
-        label = QLabel(f"検査状態{status_index}:")
-        layout.addWidget(label)
-        
-        # リストウィジェット
-        list_widget = QListWidget()
-        list_widget.setMaximumHeight(120)
-        layout.addWidget(list_widget)
-        
-        # ボタン群
-        btn_layout = QHBoxLayout()
-        
-        add_btn = QPushButton("追加")
-        add_btn.clicked.connect(
-            lambda: self._add_status_item(status_index)
-        )
-        btn_layout.addWidget(add_btn)
-        
-        remove_btn = QPushButton("削除")
-        remove_btn.clicked.connect(
-            lambda: self._remove_status_item(status_index)
-        )
-        btn_layout.addWidget(remove_btn)
-        
-        btn_layout.addStretch()
-        
-        layout.addLayout(btn_layout)
-        
-        # ウィジェット登録
-        self.widgets[f'status_{status_index}'] = list_widget
-        
-        return layout
-    
     def _load_values(self) -> None:
         """現在の設定値をUIに反映"""
         # パス設定
@@ -275,18 +208,6 @@ class BasicSettingsTab(QWidget):
             self.widgets['auto_save_interval_minutes'].setValue(
                 constants.get('auto_save_interval_minutes', 0)
             )
-        
-        # 検査状態選択肢
-        inspection_status = self.config.get('inspection_status', {})
-        
-        for i in [1, 2, 3]:
-            key = f'status_{i}'
-            if key in self.widgets:
-                list_widget = self.widgets[key]
-                items = inspection_status.get(key, [])
-                
-                for item_text in items:
-                    list_widget.addItem(item_text)
     
     def _on_browse_clicked(self, field_name: str) -> None:
         """
@@ -308,37 +229,6 @@ class BasicSettingsTab(QWidget):
             elif field_name == 'export_path':
                 self.export_path_edit.setText(directory)
     
-    def _add_status_item(self, status_index: int) -> None:
-        """
-        検査状態アイテムを追加
-        
-        Args:
-            status_index: 検査状態インデックス
-        """
-        text, ok = QInputDialog.getText(
-            self,
-            "項目追加",
-            f"検査状態{status_index}の新しい項目を入力:"
-        )
-        
-        if ok and text:
-            list_widget = self.widgets[f'status_{status_index}']
-            list_widget.addItem(text)
-    
-    def _remove_status_item(self, status_index: int) -> None:
-        """
-        検査状態アイテムを削除
-        
-        Args:
-            status_index: 検査状態インデックス
-        """
-        list_widget = self.widgets[f'status_{status_index}']
-        current_item = list_widget.currentItem()
-        
-        if current_item:
-            row = list_widget.row(current_item)
-            list_widget.takeItem(row)
-    
     def get_values(self) -> dict:
         """
         入力値を取得
@@ -357,19 +247,8 @@ class BasicSettingsTab(QWidget):
                 "thumbnail_size": self.widgets['thumbnail_size'].value(),
                 "auto_save_interval_minutes": self.widgets['auto_save_interval_minutes'].value()
             },
-            "inspection_status": {}
+            "inspection_status": self.config.get('inspection_status', {})  # 既存値を保持
         }
-        
-        # 検査状態選択肢
-        for i in [1, 2, 3]:
-            key = f'status_{i}'
-            list_widget = self.widgets[key]
-            
-            items = []
-            for row in range(list_widget.count()):
-                items.append(list_widget.item(row).text())
-            
-            values["inspection_status"][key] = items
         
         return values
     
@@ -397,16 +276,5 @@ class BasicSettingsTab(QWidget):
                 "エクスポート先デフォルトパスを指定してください。"
             )
             return False
-        
-        # 検査状態選択肢チェック（最低1項目必要）
-        for i in [1, 2, 3]:
-            list_widget = self.widgets[f'status_{i}']
-            if list_widget.count() == 0:
-                QMessageBox.warning(
-                    self,
-                    "入力エラー",
-                    f"検査状態{i}は最低1項目必要です。"
-                )
-                return False
         
         return True
