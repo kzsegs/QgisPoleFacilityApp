@@ -39,6 +39,27 @@
     "log_to_file": false,
     "log_directory": ""
   },
+  "progress_status": {
+    "column_name": "作業状況",
+    "statuses": [
+      {
+        "name": "未確認",
+        "color": "#808080",
+        "marker_size": 5
+      },
+      {
+        "name": "確認中",
+        "color": "#FFD700",
+        "marker_size": 5
+      },
+      {
+        "name": "完了",
+        "color": "#32CD32",
+        "marker_size": 5
+      }
+    ],
+    "default_status": "未確認"
+  },
   "window_positions": {
     "basic": {
       "screen": 0,

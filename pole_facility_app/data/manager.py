@@ -261,6 +261,15 @@ class DataManager:
             self._setup_photo_widgets(layer)
             Logger.info("写真ウィジェット設定を適用しました")
             
+            # 4.6. 作業状況カラム追加（v1.9.1追加）
+            try:
+                from ..progress.progress_manager import ProgressManager
+                progress_mgr = ProgressManager.get_instance()
+                progress_mgr.ensure_status_column(layer)
+                Logger.info("作業状況カラムを確認・追加しました")
+            except Exception as e:
+                Logger.warning(f"作業状況カラム追加エラー: {str(e)}")
+            
             # 5. スタイル設定
             self._setup_layer_style(layer)
             
@@ -658,14 +667,24 @@ class DataManager:
     
     def _setup_layer_style(self, layer: QgsVectorLayer) -> None:
         """
-        レイヤのスタイルを設定する。
+        レイヤのスタイルを設定する（v1.9.1改訂）。
         
         Args:
             layer: スタイル設定対象のレイヤ
+        
+        Note:
+            v1.9.1でProgressManagerによるカテゴリ分類スタイルに変更
         """
-        # シンプルなマーカー表示
-        # 詳細なスタイル設定は将来実装
-        pass
+        try:
+            from ..progress.progress_manager import ProgressManager
+            
+            progress_mgr = ProgressManager.get_instance()
+            progress_mgr.apply_style(layer)
+            
+            Logger.info("レイヤスタイルを適用しました（作業状況別）")
+            
+        except Exception as e:
+            Logger.warning(f"レイヤスタイル設定エラー: {str(e)}")
     
     def _setup_photo_widgets(self, layer: QgsVectorLayer) -> None:
         """

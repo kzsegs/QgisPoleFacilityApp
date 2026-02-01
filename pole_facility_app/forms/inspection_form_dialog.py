@@ -354,6 +354,29 @@ class InspectionFormDialog(QDialog):
         
         # ボタンエリア
         button_layout = QHBoxLayout()
+        
+        # 確定ボタン（v1.9.1追加）
+        self.confirm_button = QPushButton("確定", self)
+        self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                padding: 8px 24px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+            }
+        """)
+        self.confirm_button.setToolTip("検査を完了し、作業状況を「完了」に更新")
+        self.confirm_button.clicked.connect(self._on_confirm_clicked)
+        button_layout.addWidget(self.confirm_button)
+        
         button_layout.addStretch()
         
         # 保存ボタン
@@ -666,6 +689,127 @@ class InspectionFormDialog(QDialog):
                     "InspectionFormDialog - キャンセル: 初期値にリセットしました",
                     "PoleFacility", Qgis.Info
                 )
+    
+    def _on_confirm_clicked(self):
+        """
+        確定ボタンクリック時の処理（v1.9.1追加）
+        
+        処理フロー:
+            1. データ保存
+            2. 作業状況を「完了」に更新
+            3. ExportTrackerに編集マーク
+            4. data_savedシグナル発行
+            5. feature.confirmedイベント発行（v1.9.1追加）
+        """
+        if self._feature is None or self._layer is None:
+            QMessageBox.warning(self, "エラー", "地物またはレイヤが設定されていません。")
+            return
+        
+        # データ保存
+        if not self._save_data():
+            return
+        
+        # 作業状況を「完了」に更新
+        try:
+            from ..progress.progress_manager import ProgressManager
+            from ..utils.export_tracker import ExportTracker
+            from ..main.event_bus import EventBus
+            
+            progress_mgr = ProgressManager.get_instance()
+            progress_mgr.set_status_completed(self._layer, self._feature.id())
+            
+            # ExportTrackerに編集マーク
+            ExportTracker.get_instance().mark_modified()
+            
+            # シグナル発行
+            self.data_saved.emit()
+            
+            # v1.9.1追加: feature.confirmedイベント発行（前回地物フラグクリア用）
+            event_bus = EventBus.get_instance()
+            event_bus.emit("feature.confirmed", {"feature_id": self._feature.id()})
+            
+            QgsMessageLog.logMessage(
+                f"InspectionFormDialog - 確定完了: feature_id={self._feature.id()}",
+                "PoleFacility", Qgis.Info
+            )
+            
+            QMessageBox.information(self, "確定完了", "検査を完了し、作業状況を更新しました。")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", f"確定処理中にエラーが発生しました:\n\n{str(e)}")
+            QgsMessageLog.logMessage(
+                f"InspectionFormDialog - 確定エラー: {str(e)}",
+                "PoleFacility", Qgis.Critical
+            )
+    
+    def _save_data(self) -> bool:
+        """
+        検査項目データを保存する（v1.9.1追加）
+        
+        Returns:
+            bool: 保存が成功した場合True
+        
+        処理フロー:
+            1. バリデーション
+            2. 編集モード開始
+            3. データ更新
+            4. コミット
+        """
+        if self._feature is None or self._layer is None:
+            return False
+        
+        try:
+            # 1. バリデーション
+            is_valid, errors = self._form_builder.validate()
+            if not is_valid:
+                error_message = "入力エラーがあります:\n\n" + "\n".join(errors)
+                QMessageBox.warning(self, "入力エラー", error_message)
+                return False
+            
+            # 2. 編集モード開始
+            was_editing = self._layer.isEditable()
+            if not was_editing:
+                if not self._layer.startEditing():
+                    raise RuntimeError("編集モードを開始できません")
+            
+            try:
+                # 3. データ更新
+                values = self._form_builder.get_values()
+                
+                for field_name, value in values.items():
+                    field_idx = self._layer.fields().indexOf(field_name)
+                    if field_idx >= 0:
+                        self._layer.changeAttributeValue(
+                            self._feature.id(), field_idx, value
+                        )
+                
+                # 4. コミット
+                if not was_editing:
+                    if not self._layer.commitChanges():
+                        errors = self._layer.commitErrors()
+                        error_message = "\n".join(errors) if errors else "不明なエラー"
+                        raise RuntimeError(f"コミット失敗: {error_message}")
+                
+                QgsMessageLog.logMessage(
+                    f"InspectionFormDialog - データ保存完了: feature_id={self._feature.id()}",
+                    "PoleFacility", Qgis.Info
+                )
+                
+                return True
+                
+            except Exception as e:
+                # ロールバック
+                if not was_editing and self._layer.isEditable():
+                    self._layer.rollBack()
+                raise
+        
+        except Exception as e:
+            QMessageBox.critical(self, "保存エラー", f"保存中にエラーが発生しました:\n\n{str(e)}")
+            QgsMessageLog.logMessage(
+                f"InspectionFormDialog - 保存エラー: {str(e)}",
+                "PoleFacility", Qgis.Critical
+            )
+            return False
     
     def closeEvent(self, event):
         """

@@ -211,6 +211,11 @@ class PoleFacilityMain:
             from ..utils.logger import Logger
             Logger.configure(self.config_manager)
             
+            # ProgressManager を初期化（v1.9.1追加）
+            from ..progress.progress_manager import ProgressManager
+            self.progress_manager = ProgressManager.get_instance()
+            self.progress_manager.configure(self.config_manager)
+            
             # Logger内部状態を確認（v1.9.1デバッグ用）
             debug_config = self.config_manager.get("debug", {})
             QgsMessageLog.logMessage(
