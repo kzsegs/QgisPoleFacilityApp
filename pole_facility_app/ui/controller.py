@@ -387,6 +387,9 @@ class UIController:
         # OSMボタンのシグナル接続（v1.9.1追加）
         self.custom_toolbar.osm_clicked.connect(self._on_osm_clicked)
         
+        # 終了ボタンのシグナル接続（v1.9.1追加）
+        self.custom_toolbar.exit_clicked.connect(self._on_exit_clicked)
+        
         # メインウィンドウに追加
         self.main_window.addToolBar(self.custom_toolbar)
         
@@ -439,6 +442,139 @@ class UIController:
             )
             Logger.error("OSM背景地図の追加に失敗")
     
+    def _on_exit_clicked(self) -> None:
+        """
+        終了ボタンクリック時の処理（v1.9.1追加）
+        
+        処理フロー:
+            1. ExportTrackerで未保存チェック
+            2. 未保存データがある場合は確認ダイアログ表示
+            3. ユーザーの選択に応じて処理
+                - エクスポート: CSVエクスポート → 終了
+                - エクスポートせず終了: そのまま終了
+                - キャンセル: 継続
+        """
+        from ..utils.export_tracker import ExportTracker
+        
+        tracker = ExportTracker.get_instance()
+        
+        if tracker.has_unsaved_changes():
+            reply = self._show_export_confirmation_dialog()
+            
+            if reply == "export":
+                success = self._do_export()
+                if not success:
+                    return  # エクスポート失敗時は終了しない
+            elif reply == "cancel":
+                return  # キャンセル時は継続
+            # "exit_without_export" の場合はそのまま終了処理へ
+        
+        self._do_exit()
+    
+    def _show_export_confirmation_dialog(self) -> str:
+        """
+        エクスポート確認ダイアログを表示（v1.9.1追加）
+        
+        Returns:
+            str: ユーザーの選択
+                - "export": エクスポートする
+                - "exit_without_export": エクスポートせず終了
+                - "cancel": キャンセル
+        """
+        from PyQt5.QtWidgets import QMessageBox
+        
+        dialog = QMessageBox(self.iface.mainWindow())
+        dialog.setWindowTitle("確認")
+        dialog.setText(
+            "最後のエクスポート以降に編集があります。\n\n"
+            "データをエクスポートしますか？"
+        )
+        dialog.setIcon(QMessageBox.Question)
+        
+        export_btn = dialog.addButton("エクスポート", QMessageBox.AcceptRole)
+        exit_btn = dialog.addButton("エクスポートせず終了", QMessageBox.DestructiveRole)
+        cancel_btn = dialog.addButton("キャンセル", QMessageBox.RejectRole)
+        
+        dialog.exec_()
+        clicked = dialog.clickedButton()
+        
+        if clicked == export_btn:
+            return "export"
+        elif clicked == exit_btn:
+            return "exit_without_export"
+        else:
+            return "cancel"
+    
+    def _do_export(self) -> bool:
+        """
+        CSVエクスポートを実行（v1.9.1追加）
+        
+        Returns:
+            bool: エクスポート成功時True
+        """
+        from PyQt5.QtWidgets import QFileDialog
+        from ..data.manager import DataManager
+        
+        filepath, _ = QFileDialog.getSaveFileName(
+            self.iface.mainWindow(),
+            "CSVエクスポート",
+            "",
+            "CSV Files (*.csv)"
+        )
+        
+        if not filepath:
+            return False  # キャンセルされた
+        
+        data_manager = DataManager.get_instance()
+        return data_manager.export_to_csv(filepath)
+    
+    def _do_exit(self) -> None:
+        """
+        プラグイン終了処理を実行（v1.9.1追加）
+        
+        Note:
+            QGISは終了せず、継続動作する
+        
+        処理内容:
+            1. ウィンドウ位置を保存
+            2. 全ダイアログを閉じる
+            3. ログファイルをクローズ
+            4. カスタムUIを非表示にする（元のQGIS UIに戻す）
+            5. プラグインを無効化状態にする
+        """
+        # 1-2. ウィンドウ位置を保存 & 全ダイアログを閉じる
+        from ..forms.multi_window_form_manager import MultiWindowFormManager
+        
+        multi_window_manager = MultiWindowFormManager.get_instance()
+        if multi_window_manager:
+            multi_window_manager.save_window_positions()
+            multi_window_manager.close_all_forms()
+        
+        # 3. ログファイルをクローズ
+        Logger.cleanup()
+        
+        # 4. カスタムUIを非表示にする
+        self._restore_qgis_ui()
+        
+        # 5. プラグインを無効化状態にする
+        self.is_custom_mode = False
+        
+        Logger.info("プラグインを終了しました")
+    
+    def _restore_qgis_ui(self) -> None:
+        """
+        元のQGIS UIに戻す（v1.9.1追加）
+        
+        処理内容:
+            - カスタムツールバーを非表示にする
+            - disable_custom_mode()を呼び出して標準UI復元
+        """
+        if self.custom_toolbar:
+            self.custom_toolbar.setVisible(False)
+        
+        # カスタムモードを無効化（標準UI復元）
+        self.disable_custom_mode()
+    
     def _get_allowed_dock_widgets(self) -> List[str]:
         """
         表示を維持するドックウィジェットのリストを取得する。
@@ -447,3 +583,4 @@ class UIController:
             List[str]: ドックウィジェット名のリスト
         """
         return self.ALLOWED_DOCK_WIDGETS.copy()
+

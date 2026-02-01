@@ -786,6 +786,10 @@ class PhotoEditorPanel(QWidget):
                 f"写真を保存しました\n{filename}"
             )
             
+            # v1.9.1追加: データ編集をマーク
+            from pole_facility_app.utils.export_tracker import ExportTracker
+            ExportTracker.get_instance().mark_modified()
+            
         except Exception as e:
             self._update_status("❌ 保存失敗", "#FF3B30")
             QgsMessageLog.logMessage(

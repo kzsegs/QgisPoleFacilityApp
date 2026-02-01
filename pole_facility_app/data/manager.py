@@ -374,7 +374,7 @@ class DataManager:
     
     def export_to_csv(self, output_path: str) -> bool:
         """
-        現在のレイヤをCSVファイルにエクスポートする。
+        現在のレイヤをCSVファイルにエクスポートする（v1.9.1改訂）
         
         Args:
             output_path: 出力先CSVファイルのパス
@@ -424,6 +424,10 @@ class DataManager:
                 "csv_path": output_path,
                 "feature_count": self.current_layer.featureCount(),
             })
+            
+            # v1.9.1追加: エクスポート完了をマーク
+            from ..utils.export_tracker import ExportTracker
+            ExportTracker.get_instance().mark_exported()
             
             Logger.info(f"CSVエクスポート完了: {self.current_layer.featureCount()}件")
             
