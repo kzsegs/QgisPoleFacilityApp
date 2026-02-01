@@ -792,7 +792,7 @@ class DataManager:
     
     def _show_zoom_confirmation(self, layer: QgsVectorLayer) -> None:
         """
-        ズーム確認ダイアログを表示（v1.9.1改訂 - タイトル表示修正）
+        ズーム確認ダイアログを表示（v1.9.1追加）
         
         Args:
             layer: インポートされたレイヤ
@@ -803,19 +803,15 @@ class DataManager:
         """
         feature_count = layer.featureCount()
         
-        # QMessageBox を明示的に作成（v1.9.1修正）
-        msg_box = QMessageBox(self.iface.mainWindow())
-        msg_box.setWindowTitle("インポート完了")
-        msg_box.setIcon(QMessageBox.Question)
-        msg_box.setText(
+        reply = QMessageBox.question(
+            self.iface.mainWindow(),
+            "インポート完了",
             f"CSVファイルをインポートしました。\n"
             f"{feature_count}件のデータを読み込みました。\n\n"
-            f"インポートしたデータの範囲にズームしますか？"
+            f"インポートしたデータの範囲にズームしますか？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
         )
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.Yes)
-        
-        reply = msg_box.exec_()
         
         if reply == QMessageBox.Yes:
             self._zoom_to_layer(layer)

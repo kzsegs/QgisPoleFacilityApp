@@ -169,7 +169,7 @@ class SearchManager(QObject):
     
     def clear_filter(self) -> None:
         """
-        フィルタを解除する。
+        フィルタを解除する（v1.9.1改訂 - レイヤー削除済みチェック追加）
         
         Note:
             - レイヤのフィルタ式をクリア
@@ -180,6 +180,20 @@ class SearchManager(QObject):
         layer = self.data_manager.get_current_layer()
         if layer is None:
             logger.warning("No active layer to clear filter")
+            return
+        
+        # レイヤーが削除済みかチェック（v1.9.1追加）
+        try:
+            if not layer.isValid():
+                logger.warning("Layer is no longer valid, skipping filter clear")
+                self.current_filter = None
+                self.highlighted_features.clear()
+                return
+        except RuntimeError:
+            # C++オブジェクトが削除済み
+            logger.warning("Layer has been deleted, skipping filter clear")
+            self.current_filter = None
+            self.highlighted_features.clear()
             return
         
         # フィルタをクリア
