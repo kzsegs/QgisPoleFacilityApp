@@ -380,63 +380,105 @@ class PhotoEditorPanel(QWidget):
     
     def _create_toolbar(self) -> QToolBar:
         """
-        ツールバー作成
+        ツールバー作成（v1.9.1改訂: QGISテーマアイコン使用）
         
         Returns:
             QToolBar: 描画ツールバー
         """
+        from qgis.core import QgsApplication
+        
         toolbar = QToolBar(self)
         toolbar.setIconSize(toolbar.iconSize() * 0.8)
         
         # 選択ツール
-        select_action = QAction("選択", self)
+        select_action = QAction(
+            QgsApplication.getThemeIcon("mActionSelect.svg"),
+            "選択",
+            self
+        )
         select_action.setCheckable(True)
         select_action.setChecked(True)
+        select_action.setToolTip("選択ツール")
         select_action.triggered.connect(lambda: self._set_tool(DrawingTool.SELECT))
         toolbar.addAction(select_action)
         
         toolbar.addSeparator()
         
         # ペンツール
-        pen_action = QAction("ペン", self)
+        pen_action = QAction(
+            QgsApplication.getThemeIcon("mActionEditPencil.svg"),
+            "ペン",
+            self
+        )
         pen_action.setCheckable(True)
+        pen_action.setToolTip("ペンツール - フリーハンド描画")
         pen_action.triggered.connect(lambda: self._set_tool(DrawingTool.PEN))
         toolbar.addAction(pen_action)
         
         # 直線ツール
-        line_action = QAction("直線", self)
+        line_action = QAction(
+            QgsApplication.getThemeIcon("mIconLineLayer.svg"),
+            "直線",
+            self
+        )
         line_action.setCheckable(True)
+        line_action.setToolTip("直線ツール")
         line_action.triggered.connect(lambda: self._set_tool(DrawingTool.LINE))
         toolbar.addAction(line_action)
         
         # 矢印ツール
-        arrow_action = QAction("矢印", self)
+        arrow_action = QAction(
+            QgsApplication.getThemeIcon("mActionArrowRight.svg"),
+            "矢印",
+            self
+        )
         arrow_action.setCheckable(True)
+        arrow_action.setToolTip("矢印ツール")
         arrow_action.triggered.connect(lambda: self._set_tool(DrawingTool.ARROW))
         toolbar.addAction(arrow_action)
         
         # 矩形ツール
-        rect_action = QAction("矩形", self)
+        rect_action = QAction(
+            QgsApplication.getThemeIcon("mIconPolygonLayer.svg"),
+            "矩形",
+            self
+        )
         rect_action.setCheckable(True)
+        rect_action.setToolTip("矩形ツール")
         rect_action.triggered.connect(lambda: self._set_tool(DrawingTool.RECT))
         toolbar.addAction(rect_action)
         
         # 楕円ツール
-        ellipse_action = QAction("楕円", self)
+        ellipse_action = QAction(
+            QgsApplication.getThemeIcon("mIconPointLayer.svg"),
+            "楕円",
+            self
+        )
         ellipse_action.setCheckable(True)
+        ellipse_action.setToolTip("楕円ツール")
         ellipse_action.triggered.connect(lambda: self._set_tool(DrawingTool.ELLIPSE))
         toolbar.addAction(ellipse_action)
         
         # テキストツール
-        text_action = QAction("テキスト", self)
+        text_action = QAction(
+            QgsApplication.getThemeIcon("mActionLabel.svg"),
+            "テキスト",
+            self
+        )
         text_action.setCheckable(True)
+        text_action.setToolTip("テキストツール")
         text_action.triggered.connect(lambda: self._set_tool(DrawingTool.TEXT))
         toolbar.addAction(text_action)
         
         toolbar.addSeparator()
         
         # 色選択
-        color_action = QAction("色", self)
+        color_action = QAction(
+            QgsApplication.getThemeIcon("mIconColorBox.svg"),
+            "色",
+            self
+        )
+        color_action.setToolTip("描画色を選択")
         color_action.triggered.connect(self._choose_color)
         toolbar.addAction(color_action)
         
@@ -446,20 +488,43 @@ class PhotoEditorPanel(QWidget):
         width_spinbox.setMinimum(1)
         width_spinbox.setMaximum(20)
         width_spinbox.setValue(self.line_width)
+        width_spinbox.setToolTip("線の太さ（1-20）")
         width_spinbox.valueChanged.connect(self._set_line_width)
         toolbar.addWidget(width_spinbox)
         
         toolbar.addSeparator()
         
         # 削除
-        delete_action = QAction("削除", self)
+        delete_action = QAction(
+            QgsApplication.getThemeIcon("mActionDeleteSelected.svg"),
+            "削除",
+            self
+        )
+        delete_action.setToolTip("選択したアイテムを削除")
         delete_action.triggered.connect(self._delete_selected)
         toolbar.addAction(delete_action)
         
         # 全削除
-        clear_action = QAction("全削除", self)
+        clear_action = QAction(
+            QgsApplication.getThemeIcon("mActionDeleteSelected.svg"),
+            "全削除",
+            self
+        )
+        clear_action.setToolTip("すべての描画を削除")
         clear_action.triggered.connect(self._clear_all_drawings)
         toolbar.addAction(clear_action)
+        
+        toolbar.addSeparator()
+        
+        # 元画像差替（v1.9.1追加）
+        replace_action = QAction(
+            QgsApplication.getThemeIcon("mActionRefresh.svg"),
+            "元画像差替",
+            self
+        )
+        replace_action.setToolTip("編集済み画像で元画像を差し替え")
+        replace_action.triggered.connect(self._on_replace_original_clicked)
+        toolbar.addAction(replace_action)
         
         # アクショングループ化（排他的選択）
         from qgis.PyQt.QtWidgets import QActionGroup
@@ -732,7 +797,7 @@ class PhotoEditorPanel(QWidget):
                 if field_idx < 0:
                     raise ValueError(f"フィールドが見つかりません: {self._field_name}")
                 
-                # 属性値更新
+                # 属性値更新（修正後フィールド）
                 self._layer.changeAttributeValue(
                     self._feature.id(), 
                     field_idx, 
@@ -801,6 +866,152 @@ class PhotoEditorPanel(QWidget):
                 self,
                 "保存エラー",
                 f"写真の保存に失敗しました\n\n{str(e)}"
+            )
+    
+    def _on_replace_original_clicked(self):
+        """
+        元画像差替ボタンクリック（v1.9.1追加）
+        
+        処理フロー:
+            1. 確認ダイアログ表示
+            2. 修正前フィールドの値を取得
+            3. 修正後フィールドに修正前フィールドの値をコピー
+            4. 元画像を再読み込み（表示更新）
+            5. 完了メッセージ表示
+        
+        Note:
+            修正前フィールドの値は変更しない
+            現在の編集内容は破棄される
+        """
+        try:
+            # レイヤチェック
+            if not self._layer:
+                raise ValueError("レイヤが設定されていません。set_layer()を呼び出してください。")
+            
+            # 地物チェック
+            if not self._feature:
+                raise ValueError("地物が設定されていません")
+            
+            # 修正前フィールド名チェック
+            if not self._source_field_name:
+                raise ValueError("修正前フィールド名が設定されていません")
+            
+            # 確認ダイアログ
+            reply = QMessageBox.question(
+                self,
+                "元画像差替の確認",
+                "元画像で差し替えますか？\n\n"
+                "修正後の画像が元画像に置き換わります。\n"
+                "現在の編集内容は破棄されます。",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply != QMessageBox.Yes:
+                return
+            
+            # 修正前フィールドの値を取得
+            source_value = self._get_field_value(self._feature, self._source_field_name)
+            
+            if not source_value:
+                QMessageBox.warning(
+                    self,
+                    "差替エラー",
+                    "元画像が設定されていません"
+                )
+                return
+            
+            # レイヤに保存
+            was_editing = self._layer.isEditable()
+            if not was_editing:
+                if not self._layer.startEditing():
+                    raise RuntimeError("編集モードを開始できません")
+            
+            try:
+                # 修正後フィールドインデックス取得
+                field_idx = self._layer.fields().indexOf(self._field_name)
+                if field_idx < 0:
+                    raise ValueError(f"修正後フィールドが見つかりません: {self._field_name}")
+                
+                # 修正後フィールドに修正前の値をコピー
+                self._layer.changeAttributeValue(
+                    self._feature.id(),
+                    field_idx,
+                    source_value
+                )
+                
+                # コミット
+                if not was_editing:
+                    if not self._layer.commitChanges():
+                        errors = self._layer.commitErrors()
+                        raise RuntimeError(f"コミット失敗: {', '.join(errors)}")
+                
+                QgsMessageLog.logMessage(
+                    f"PhotoEditorPanel - 元画像差替完了: {self._field_name} ← {source_value}",
+                    "PoleFacility", Qgis.Info
+                )
+                
+            except Exception as e:
+                # エラー時はロールバック
+                if not was_editing and self._layer.isEditable():
+                    self._layer.rollBack()
+                raise
+            
+            # ★元画像を再読み込み（表示更新）★
+            photo_path = self._resolve_photo_path(source_value)
+            if photo_path and os.path.exists(photo_path):
+                pixmap = self._load_image_as_pixmap(photo_path)
+                
+                if pixmap and not pixmap.isNull():
+                    # シーンをクリア
+                    self.graphics_scene.clear()
+                    
+                    # 新しい画像をセット
+                    self.pixmap_item = QGraphicsPixmapItem(pixmap)
+                    self.graphics_scene.addItem(self.pixmap_item)
+                    
+                    # 描画アイテムをクリア
+                    self._drawing_items.clear()
+                    
+                    # シーン範囲設定
+                    rect = pixmap.rect()
+                    self.graphics_scene.setSceneRect(
+                        QRectF(rect.x(), rect.y(), rect.width(), rect.height())
+                    )
+                    
+                    # フィット表示
+                    QTimer.singleShot(100, self._fit_to_view)
+            
+            # ステータス更新
+            self._update_status(f"✓ 元画像に差替", "#34C759")
+            
+            QgsMessageLog.logMessage(
+                f"元画像に差し替えました: {source_value}",
+                "PoleFacility", Qgis.Info
+            )
+            
+            QMessageBox.information(
+                self,
+                "差替完了",
+                f"元画像に差し替えました\n\n"
+                f"編集内容は破棄されました。"
+            )
+            
+            # v1.9.1追加: データ編集をマーク
+            from pole_facility_app.utils.export_tracker import ExportTracker
+            ExportTracker.get_instance().mark_modified()
+            
+        except Exception as e:
+            self._update_status("❌ 差替失敗", "#FF3B30")
+            QgsMessageLog.logMessage(
+                f"元画像差替エラー: {str(e)}",
+                "PoleFacility", Qgis.Critical
+            )
+            
+            QMessageBox.critical(
+                self,
+                "差替エラー",
+                f"元画像の差し替えに失敗しました\n\n{str(e)}"
             )
     
     def _render_scene_to_pixmap(self) -> QPixmap:

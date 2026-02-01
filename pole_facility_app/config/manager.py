@@ -667,3 +667,64 @@ class ConfigManager:
             "ConfigManager - ウィンドウ位置をリセット",
             "PoleFacility", Qgis.Info
         )
+    
+    # ==================== 写真フィールド管理 ====================
+    
+    def get_photo_fields(self) -> dict:
+        """
+        写真フィールド定義を取得
+        
+        Returns:
+            dict: {
+                'before': ['設備写真1URI_修正前', '設備写真2URI_修正前', ...],
+                'after': ['設備写真1URI_修正後', '設備写真2URI_修正後', ...]
+            }
+        
+        Note:
+            - field_categories.photo から取得
+            - fields_before, fields_after を返す
+        """
+        photo_config = self.config.get('field_categories', {}).get('photo', {})
+        
+        return {
+            'before': photo_config.get('fields_before', []),
+            'after': photo_config.get('fields_after', [])
+        }
+    
+    def get_photo_field_pairs(self) -> list:
+        """
+        写真フィールドのペアを取得
+        
+        Returns:
+            list: [
+                ('設備写真1URI_修正前', '設備写真1URI_修正後'),
+                ('設備写真2URI_修正前', '設備写真2URI_修正後'),
+                ('設備写真3URI_修正前', '設備写真3URI_修正後')
+            ]
+        
+        Note:
+            - 修正前・修正後を同じインデックスでペアリング
+            - 通常は3ペア（写真1〜3）
+        """
+        fields = self.get_photo_fields()
+        before_fields = fields.get('before', [])
+        after_fields = fields.get('after', [])
+        
+        # ペア作成（同じインデックスで対応）
+        pairs = []
+        for i in range(min(len(before_fields), len(after_fields))):
+            pairs.append((before_fields[i], after_fields[i]))
+        
+        return pairs
+    
+    def get_photo_count(self) -> int:
+        """
+        写真フィールドのペア数を取得
+        
+        Returns:
+            int: 写真ペア数（通常3）
+        
+        Note:
+            - get_photo_field_pairs() の長さを返す
+        """
+        return len(self.get_photo_field_pairs())
