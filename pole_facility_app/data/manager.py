@@ -46,7 +46,7 @@ from ..utils.logger import Logger
 
 class DataManager:
     """
-    CSV読み込み、GeoPackage読み書き、レイヤ管理を行う。
+    CSV読み込み、GeoPackage読み書き、レイヤ管理を行う（Singleton）
     
     Attributes:
         iface: QGISインターフェース
@@ -62,7 +62,16 @@ class DataManager:
         modification_history: 変更履歴（セッション内のみ）
     """
     
-    def __init__(
+    _instance: Optional['DataManager'] = None
+    
+    def __new__(cls, iface=None, event_bus=None, config_manager=None):
+        """Singletonインスタンス生成"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialize(iface, event_bus, config_manager)
+        return cls._instance
+    
+    def _initialize(
         self,
         iface: QgisInterface,
         event_bus: EventBus,
@@ -76,6 +85,10 @@ class DataManager:
             event_bus: イベントバス
             config_manager: 設定マネージャー（オプション）
         """
+        # 重複初期化を防止
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+        
         self.iface = iface
         self.event_bus = event_bus
         self.config_manager = config_manager
@@ -92,7 +105,30 @@ class DataManager:
         self.last_editor: str = ""
         self.modification_history: List[Dict[str, Any]] = []
         
+        self._initialized = True
         Logger.info("DataManager初期化完了")
+    
+    @classmethod
+    def get_instance(cls) -> 'DataManager':
+        """
+        Singletonインスタンスを取得
+        
+        Returns:
+            DataManager: Singletonインスタンス
+            
+        Raises:
+            RuntimeError: インスタンスが未初期化の場合
+        """
+        if cls._instance is None:
+            raise RuntimeError(
+                "DataManager未初期化。先にコンストラクタを呼び出してください。"
+            )
+        return cls._instance
+    
+    @classmethod
+    def clear_instance(cls):
+        """インスタンスをクリア（テスト用）"""
+        cls._instance = None
     
     # ========== ダイアログメソッド（新規追加） ==========
     
