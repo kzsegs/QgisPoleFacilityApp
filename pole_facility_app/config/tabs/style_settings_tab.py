@@ -12,6 +12,11 @@ UI構成:
 Note:
     - marker_shapeはPhase 3-Bスコープ外（将来フェーズで対応）
     - 当面は丸（circle）固定
+
+v1.9.1改訂:
+    - QSpinBox.valueChanged → editingFinished に変更
+    - スピンボックス編集完了時のみ設定を更新
+    - パフォーマンス向上
 """
 
 from typing import Dict, Any, List
@@ -185,7 +190,7 @@ class StyleSettingsTab(QWidget):
         ]
     
     def _populate_status_table(self) -> None:
-        """ステータスデータをテーブルに反映"""
+        """ステータスデータをテーブルに反映（v1.9.1改訂）"""
         self.status_table.setRowCount(len(self.status_data))
         
         for row, status in enumerate(self.status_data):
@@ -203,13 +208,13 @@ class StyleSettingsTab(QWidget):
             )
             self.status_table.setCellWidget(row, 1, color_btn)
             
-            # サイズスピンボックス
+            # サイズスピンボックス（v1.9.1修正: editingFinished使用）
             size_spin = QSpinBox()
             size_spin.setRange(1, 20)
             size_spin.setValue(status.get("marker_size", 5))
             size_spin.setSuffix(" mm")
-            size_spin.valueChanged.connect(
-                lambda value, r=row: self._on_size_changed(r, value)
+            size_spin.editingFinished.connect(
+                lambda r=row: self._on_size_editing_finished(r)
             )
             self.status_table.setCellWidget(row, 2, size_spin)
     
@@ -323,12 +328,30 @@ class StyleSettingsTab(QWidget):
                 btn.setStyleSheet(f"background-color: {color_hex};")
                 btn.setText(color_hex)
     
-    def _on_size_changed(self, row: int, value: int) -> None:
-        """サイズ変更時"""
+    def _on_size_editing_finished(self, row: int) -> None:
+        """
+        サイズスピンボックス編集完了時（v1.9.1追加）
+        
+        Args:
+            row: テーブル行番号
+        
+        Note:
+            editingFinishedシグナルから呼ばれるため、
+            スピンボックスから値を取得する必要がある
+        """
         if row >= len(self.status_data):
             return
         
-        self.status_data[row]["marker_size"] = value
+        # スピンボックスから現在値を取得
+        size_spin = self.status_table.cellWidget(row, 2)
+        if size_spin and isinstance(size_spin, QSpinBox):
+            value = size_spin.value()
+            self.status_data[row]["marker_size"] = value
+            
+            QgsMessageLog.logMessage(
+                f"StyleSettingsTab - サイズ更新: row={row}, size={value}",
+                "PoleFacility", Qgis.Info
+            )
     
     def _on_reset_clicked(self) -> None:
         """デフォルトに戻すボタンクリック時"""
