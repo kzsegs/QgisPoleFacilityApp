@@ -19,7 +19,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
     QGraphicsLineItem, QGraphicsRectItem, QGraphicsEllipseItem,
-    QGraphicsPathItem, QGraphicsTextItem, QToolBar, QAction,
+    QGraphicsPathItem, QGraphicsTextItem, QGraphicsItem, QToolBar, QAction,
     QColorDialog, QSpinBox, QInputDialog, QMessageBox
 )
 from qgis.PyQt.QtGui import (
@@ -155,7 +155,21 @@ class PhotoGraphicsView(QGraphicsView):
             self.current_item.setPath(self.pen_path)
     
     def _finish_pen_drawing(self):
-        """ペン描画終了"""
+        """ペン描画終了（v1.9.1修正）"""
+        if self.current_item:
+            # 選択可能・移動可能にする（v1.9.1追加）
+            self.current_item.setFlag(QGraphicsItem.ItemIsSelectable, True)
+            self.current_item.setFlag(QGraphicsItem.ItemIsMovable, True)
+            
+            # _drawing_itemsに追加（v1.9.1追加）
+            self.editor_panel._drawing_items.append(self.current_item)
+            
+            from qgis.core import QgsMessageLog, Qgis
+            QgsMessageLog.logMessage(
+                f"PhotoEditorGraphicsView - ペン描画完了: item追加",
+                "PoleFacility", Qgis.Info
+            )
+        
         self.pen_path = None
     
     def _update_shape_preview(self, current_point):
@@ -723,11 +737,22 @@ class PhotoEditorPanel(QWidget):
         self.line_width = width
     
     def _delete_selected(self):
-        """選択されたアイテムを削除"""
+        """選択されたアイテムを削除（v1.9.1修正）"""
+        from qgis.core import QgsMessageLog, Qgis
+        
         selected_items = self.graphics_scene.selectedItems()
         for item in selected_items:
             if item != self.pixmap_item:  # 背景画像は削除しない
                 self.graphics_scene.removeItem(item)
+                
+                # _drawing_itemsからも削除（v1.9.1追加）
+                if item in self._drawing_items:
+                    self._drawing_items.remove(item)
+                    
+                    QgsMessageLog.logMessage(
+                        f"PhotoEditorPanel - アイテム削除: type={type(item).__name__}",
+                        "PoleFacility", Qgis.Info
+                    )
     
     def _clear_all_drawings(self):
         """全描画オブジェクトを削除（確認あり）"""
