@@ -1,74 +1,91 @@
 # -*- coding: utf-8 -*-
 """
-Photo Management Dialog - 写真管理ダイアログ
+Photo Management Dialog - 写真管理ダイアログ（Phase 3-A統合版・美的改善）
 
-修正前写真3枚（読み取り専用）と修正後写真3枚（編集可能）を
-同時に表示・管理するダイアログ。複数ウィンドウUIの2つ目のダイアログ。
+Phase 3-A対応: 4列レイアウト + 各行に拡大表示
+既存のPhotoViewerPanel/PhotoEditorPanelを維持しつつ、
+美しく整ったレイアウトを実現。
 
-機能:
-    - 修正前写真3枚を PhotoViewerPanel で表示
-    - 修正後写真3枚を PhotoEditorPanel で編集
-    - 各写真の個別保存
-    - レイヤへのデータ保存
+レイアウト:
+    [サムネイル] [修正前(Viewer)] [拡大表示(Zoom)] [修正後(Editor)]
+    各行ごとに拡大表示パネルを配置
 """
 
 from typing import Optional, List
 from qgis.PyQt.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLabel, QPushButton, QScrollArea, QWidget
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QPushButton, QScrollArea, QWidget, QFrame
 )
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtCore import Qt, pyqtSignal, QEvent
 from qgis.core import QgsFeature, QgsVectorLayer, QgsMessageLog, Qgis
 
 from ..photo.viewer_panel import PhotoViewerPanel
 from ..photo.editor_panel import PhotoEditorPanel
+from ..photo.thumbnail_widget import ThumbnailWidget
+from ..photo.zoom_panel import ZoomPanel
+
+
+class HoverDetector(QWidget):
+    """
+    hover検出用ラッパーウィジェット
+    """
+    hovered = pyqtSignal(str)  # image_path
+    
+    def __init__(self, wrapped_widget, image_path_getter, parent=None):
+        super().__init__(parent)
+        self._wrapped_widget = wrapped_widget
+        self._image_path_getter = image_path_getter
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(wrapped_widget)
+        
+        self.setMouseTracking(True)
+        wrapped_widget.setMouseTracking(True)
+        
+        # 子ウィジェットにもイベントフィルタを設定
+        self._install_event_filter_recursive(wrapped_widget)
+    
+    def _install_event_filter_recursive(self, widget):
+        """再帰的にイベントフィルタを設定"""
+        widget.installEventFilter(self)
+        for child in widget.findChildren(QWidget):
+            child.installEventFilter(self)
+    
+    def eventFilter(self, obj, event):
+        """イベントフィルタ"""
+        if event.type() == QEvent.Enter:
+            image_path = self._image_path_getter()
+            if image_path:
+                self.hovered.emit(image_path)
+        elif event.type() == QEvent.Leave:
+            # 親ウィジェットの外に出た場合のみクリア
+            if not self.rect().contains(self.mapFromGlobal(self.cursor().pos())):
+                self.hovered.emit("")
+        return super().eventFilter(obj, event)
+    
+    def enterEvent(self, event):
+        """マウスオーバー時"""
+        super().enterEvent(event)
+        image_path = self._image_path_getter()
+        if image_path:
+            self.hovered.emit(image_path)
+    
+    def leaveEvent(self, event):
+        """マウスアウト時"""
+        super().leaveEvent(event)
+        self.hovered.emit("")
 
 
 class PhotoManagementDialog(QDialog):
     """
-    写真管理ダイアログ
-    
-    使用例:
-        dialog = PhotoManagementDialog(config_manager, data_manager, parent)
-        dialog.set_layer(layer)        # 必須：保存に必要
-        dialog.set_feature(feature)    # 地物をセット
-        dialog.show()
-    
-    表示フィールド:
-        修正前（ViewerPanel×3）:
-            - 設備写真1URI_修正前
-            - 設備写真2URI_修正前
-            - 設備写真3URI_修正前
-        
-        修正後（EditorPanel×3）:
-            - 設備写真1URI_修正後
-            - 設備写真2URI_修正後
-            - 設備写真3URI_修正後
-    
-    レイアウト:
-        ┌─────────────────────────────────────────┐
-        │ ■ 修正前写真                            │
-        │ [Viewer1] [Viewer2] [Viewer3]           │
-        │                                         │
-        │ ■ 修正後写真                            │
-        │ [Editor1] [Editor2] [Editor3]           │
-        │                                         │
-        │                         [閉じる]        │
-        └─────────────────────────────────────────┘
+    写真管理ダイアログ（Phase 3-A統合版・美的改善）
     """
     
-    closed = pyqtSignal()  # ダイアログクローズ時のシグナル
-    photo_saved = pyqtSignal(str, str)  # (field_name, relative_path)
+    closed = pyqtSignal()
+    photo_saved = pyqtSignal(str, str)
     
     def __init__(self, config_manager, data_manager, parent=None):
-        """
-        初期化（v1.9.1改訂）
-        
-        Args:
-            config_manager: ConfigManager インスタンス
-            data_manager: DataManager インスタンス
-            parent: 親ウィジェット
-        """
         super().__init__(parent)
         
         self._config_manager = config_manager
@@ -76,9 +93,15 @@ class PhotoManagementDialog(QDialog):
         self._feature = None
         self._layer = None
         
-        # PhotoPanel リスト
+        # ウィジェットリスト
+        self._thumbnail_widgets: List[ThumbnailWidget] = []
         self._viewer_panels: List[PhotoViewerPanel] = []
         self._editor_panels: List[PhotoEditorPanel] = []
+        self._zoom_panels: List[ZoomPanel] = []
+        
+        # 画像パス保持用
+        self._before_image_paths = ["", "", ""]
+        self._after_image_paths = ["", "", ""]
         
         # フィールド名定義
         self._before_fields = [
@@ -93,7 +116,6 @@ class PhotoManagementDialog(QDialog):
             "設備写真3URI_修正後"
         ]
         
-        # v1.9.1追加: 移動・リサイズイベントの遅延タイマー
         self._save_timer = None
         
         self._setup_window()
@@ -107,34 +129,23 @@ class PhotoManagementDialog(QDialog):
             Qt.WindowCloseButtonHint |
             Qt.WindowMinimizeButtonHint
         )
-        self.resize(1000, 700)
+        self.resize(1600, 900)
     
     def _create_ui(self):
-        """
-        UI作成
-        
-        レイアウト:
-            [タイトル]
-            [修正前写真セクション]
-                [Viewer1] [Viewer2] [Viewer3]
-            [修正後写真セクション]
-                [Editor1] [Editor2] [Editor3]
-            [閉じるボタン]
-        """
-        # メインレイアウト
+        """UI作成"""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(16)
         
         # タイトル
         title_label = QLabel("写真管理", self)
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: bold;
-                color: #333;
-                padding-bottom: 8px;
-                border-bottom: 2px solid #007AFF;
+                color: #2c3e50;
+                padding-bottom: 12px;
+                border-bottom: 3px solid #3498db;
             }
         """)
         main_layout.addWidget(title_label)
@@ -142,20 +153,18 @@ class PhotoManagementDialog(QDialog):
         # スクロールエリア
         scroll_area = QScrollArea(self)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet("QScrollArea { background: transparent; }")
         
         scroll_widget = QWidget()
+        scroll_widget.setStyleSheet("QWidget { background: white; }")
         scroll_layout = QVBoxLayout(scroll_widget)
-        scroll_layout.setSpacing(16)
+        scroll_layout.setSpacing(12)
         
-        # ■ 修正前写真セクション
-        before_group = self._create_before_section()
-        scroll_layout.addWidget(before_group)
-        
-        # ■ 修正後写真セクション
-        after_group = self._create_after_section()
-        scroll_layout.addWidget(after_group)
+        # 各写真行を作成
+        for i in range(len(self._before_fields)):
+            row_widget = self._create_photo_row(i)
+            scroll_layout.addWidget(row_widget)
         
         scroll_layout.addStretch()
         scroll_area.setWidget(scroll_widget)
@@ -168,129 +177,193 @@ class PhotoManagementDialog(QDialog):
         close_button = QPushButton("閉じる", self)
         close_button.setStyleSheet("""
             QPushButton {
-                background-color: #6c757d;
+                background-color: #95a5a6;
                 color: white;
                 border: none;
-                padding: 8px 24px;
-                border-radius: 4px;
+                padding: 10px 32px;
+                border-radius: 6px;
+                font-size: 13px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-            QPushButton:pressed {
-                background-color: #545b62;
-            }
+            QPushButton:hover { background-color: #7f8c8d; }
+            QPushButton:pressed { background-color: #6c7a89; }
         """)
         close_button.clicked.connect(self.close)
         button_layout.addWidget(close_button)
         
         main_layout.addLayout(button_layout)
     
-    def _create_before_section(self) -> QGroupBox:
+    def _create_photo_row(self, index: int) -> QWidget:
         """
-        修正前写真セクション作成
-        
-        Returns:
-            QGroupBox: 修正前写真セクション
-        
-        レイアウト:
-            [Viewer1] [Viewer2] [Viewer3]
-        """
-        group = QGroupBox("■ 修正前写真", self)
-        group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                margin-top: 12px;
-                padding-top: 12px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        layout = QHBoxLayout(group)
-        layout.setSpacing(12)
-        layout.setContentsMargins(12, 20, 12, 12)
-        
-        # ViewerPanel × 3
-        for i, field_name in enumerate(self._before_fields):
-            panel = PhotoViewerPanel(self._config_manager, self)
-            self._viewer_panels.append(panel)
-            layout.addWidget(panel)
-        
-        return group
-    
-    def _create_after_section(self) -> QGroupBox:
-        """
-        修正後写真セクション作成
-        
-        Returns:
-            QGroupBox: 修正後写真セクション
-        
-        レイアウト:
-            [Editor1] [Editor2] [Editor3]
-        """
-        group = QGroupBox("■ 修正後写真", self)
-        group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                margin-top: 12px;
-                padding-top: 12px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        layout = QHBoxLayout(group)
-        layout.setSpacing(12)
-        layout.setContentsMargins(12, 20, 12, 12)
-        
-        # EditorPanel × 3
-        for i, field_name in enumerate(self._after_fields):
-            panel = PhotoEditorPanel(
-                self._config_manager,
-                self._data_manager,
-                self
-            )
-            
-            # シグナル接続
-            panel.photo_saved.connect(
-                lambda path, fname=field_name: self._on_photo_saved(fname, path)
-            )
-            
-            self._editor_panels.append(panel)
-            layout.addWidget(panel)
-        
-        return group
-    
-    def set_layer(self, layer: QgsVectorLayer):
-        """
-        レイヤをセット
+        1行分の写真表示ウィジェットを作成
         
         Args:
-            layer: 対象レイヤ
+            index: 行インデックス（0-2）
         
-        Note:
-            PhotoEditorPanelがデータ保存に使用するため必須。
-            set_featureの前に呼び出すこと。
-        
-        処理フロー:
-            1. レイヤを保存
-            2. 各EditorPanelにレイヤをセット
+        Returns:
+            QWidget: 1行分のウィジェット
         """
+        row_widget = QFrame()
+        row_widget.setFrameShape(QFrame.Box)
+        row_widget.setStyleSheet("""
+            QFrame {
+                background: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                padding: 12px;
+            }
+        """)
+        
+        layout = QHBoxLayout(row_widget)
+        layout.setSpacing(16)
+        layout.setContentsMargins(12, 12, 12, 12)
+        
+        display_name = self._generate_display_name(self._before_fields[index])
+        
+        # 1. サムネイル列（固定幅100px）
+        thumbnail_container = QWidget()
+        thumbnail_container.setFixedWidth(100)
+        thumbnail_layout = QVBoxLayout(thumbnail_container)
+        thumbnail_layout.setContentsMargins(0, 0, 0, 0)
+        thumbnail_layout.setSpacing(4)
+        
+        thumbnail = ThumbnailWidget(display_name, self._config_manager)
+        self._thumbnail_widgets.append(thumbnail)
+        thumbnail_layout.addWidget(thumbnail)
+        thumbnail_layout.addStretch()
+        
+        layout.addWidget(thumbnail_container)
+        
+        # 2. 修正前列（固定幅320px）
+        viewer_container = self._create_panel_container("修正前")
+        viewer_container.setFixedWidth(320)
+        
+        viewer_panel = PhotoViewerPanel(self._config_manager)
+        if viewer_panel.graphics_view:
+            viewer_panel.graphics_view.setFixedSize(300, 200)
+        
+        # hover検出ラッパー
+        viewer_wrapper = HoverDetector(
+            viewer_panel,
+            lambda idx=index: self._before_image_paths[idx]
+        )
+        viewer_wrapper.hovered.connect(lambda path, idx=index: self._on_viewer_hovered(idx, path))
+        
+        self._viewer_panels.append(viewer_panel)
+        viewer_container.layout().addWidget(viewer_wrapper)
+        
+        layout.addWidget(viewer_container)
+        
+        # 3. 拡大表示列（固定幅440px）
+        zoom_panel = ZoomPanel()
+        zoom_panel.setFixedSize(440, 360)
+        self._zoom_panels.append(zoom_panel)
+        
+        zoom_container = QWidget()
+        zoom_container.setFixedWidth(440)
+        zoom_layout = QVBoxLayout(zoom_container)
+        zoom_layout.setContentsMargins(0, 0, 0, 0)
+        zoom_layout.addWidget(zoom_panel)
+        
+        layout.addWidget(zoom_container)
+        
+        # 4. 修正後列（固定幅320px）
+        editor_container = self._create_panel_container("修正後")
+        editor_container.setFixedWidth(320)
+        
+        editor_panel = PhotoEditorPanel(self._config_manager, self._data_manager)
+        if editor_panel.graphics_view:
+            editor_panel.graphics_view.setFixedSize(300, 200)
+        
+        # シーン変更をリアルタイム監視
+        if hasattr(editor_panel, 'graphics_scene') and editor_panel.graphics_scene:
+            editor_panel.graphics_scene.changed.connect(
+                lambda region, idx=index: self._on_editor_scene_changed(idx)
+            )
+        
+        # hover検出ラッパー
+        editor_wrapper = HoverDetector(
+            editor_panel,
+            lambda idx=index: self._after_image_paths[idx]
+        )
+        editor_wrapper.hovered.connect(lambda path, idx=index: self._on_editor_hovered(idx, path))
+        
+        # シグナル接続
+        after_field = self._after_fields[index]
+        editor_panel.photo_saved.connect(
+            lambda path, fname=after_field: self._on_photo_saved(fname, path)
+        )
+        
+        self._editor_panels.append(editor_panel)
+        editor_container.layout().addWidget(editor_wrapper)
+        
+        layout.addWidget(editor_container)
+        
+        layout.addStretch()
+        
+        return row_widget
+    
+    def _create_panel_container(self, title: str) -> QWidget:
+        """パネル用コンテナ作成"""
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(4)
+        
+        # タイトルラベル（ファイルパス表示用の高さを確保）
+        title_label = QLabel(title)
+        title_label.setFixedHeight(20)
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                font-size: 11pt;
+                color: #495057;
+                background: #e9ecef;
+                border-radius: 4px;
+                padding: 4px;
+            }
+        """)
+        container_layout.addWidget(title_label)
+        
+        return container
+    
+    def _on_viewer_hovered(self, index: int, image_path: str):
+        """修正前パネルhover時"""
+        if index < len(self._zoom_panels):
+            self._zoom_panels[index].show_image(image_path)
+    
+    def _on_editor_hovered(self, index: int, image_path: str):
+        """修正後パネルhover時（シーン込み）"""
+        if index < len(self._zoom_panels) and index < len(self._editor_panels):
+            editor_panel = self._editor_panels[index]
+            # EditorPanelのシーン全体を渡す
+            scene = editor_panel.graphics_scene if hasattr(editor_panel, 'graphics_scene') else None
+            self._zoom_panels[index].show_image(image_path, scene)
+    
+    def _on_editor_scene_changed(self, index: int):
+        """EditorPanelのシーン変更時（リアルタイム更新）"""
+        # 現在hoverしているパネルのみ更新
+        if index < len(self._zoom_panels) and index < len(self._editor_panels):
+            zoom_panel = self._zoom_panels[index]
+            # 現在表示中のソースがこのパネルのシーンの場合のみ更新
+            if zoom_panel._current_source_type == "scene":
+                editor_panel = self._editor_panels[index]
+                scene = editor_panel.graphics_scene if hasattr(editor_panel, 'graphics_scene') else None
+                if scene:
+                    zoom_panel.show_image("", scene)
+    
+    def _generate_display_name(self, field_name: str) -> str:
+        """フィールド名から表示名を生成"""
+        parts = field_name.split('_')
+        if len(parts) > 1 and parts[-1] in ["修正前", "修正後"]:
+            return '_'.join(parts[:-1])
+        return field_name
+    
+    def set_layer(self, layer: QgsVectorLayer):
+        """レイヤをセット"""
         self._layer = layer
         
-        # 各EditorPanelにレイヤをセット
         for panel in self._editor_panels:
             panel.set_layer(layer)
         
@@ -300,76 +373,60 @@ class PhotoManagementDialog(QDialog):
         )
     
     def set_feature(self, feature: QgsFeature):
-        """
-        地物をセット
-        
-        Args:
-            feature: 地物オブジェクト
-        
-        処理フロー:
-            1. 地物を保存
-            2. ViewerPanel × 3 に写真をセット
-            3. EditorPanel × 3 に写真をセット
-            4. ウィンドウタイトルを更新
-        
-        Note:
-            set_layer()を先に呼び出す必要がある
-        """
+        """地物をセット"""
         try:
             self._feature = feature
             
             if not feature or not feature.isValid():
-                QgsMessageLog.logMessage(
-                    "PhotoManagementDialog - 無効な地物が指定されました",
-                    "PoleFacility", Qgis.Warning
-                )
                 return
             
-            # レイヤチェック
             if not self._layer:
                 QgsMessageLog.logMessage(
-                    "PhotoManagementDialog - レイヤが設定されていません。set_layer()を先に呼び出してください。",
+                    "PhotoManagementDialog - レイヤが設定されていません",
                     "PoleFacility", Qgis.Warning
                 )
             
-            # ViewerPanel × 3 に写真をセット
+            # 画像パスを取得・保存
+            field_names = [f.name() for f in feature.fields()]
+            
+            for i, field_name in enumerate(self._before_fields):
+                if field_name in field_names:
+                    self._before_image_paths[i] = self._resolve_path(feature[field_name] or "")
+            
+            for i, field_name in enumerate(self._after_fields):
+                if field_name in field_names:
+                    source_field = self._before_fields[i]
+                    if source_field in field_names:
+                        self._after_image_paths[i] = self._resolve_path(feature[source_field] or "")
+            
+            # ViewerPanel設定
             for i, (panel, field_name) in enumerate(zip(self._viewer_panels, self._before_fields)):
                 try:
                     panel.set_photo(feature, field_name)
-                    QgsMessageLog.logMessage(
-                        f"PhotoManagementDialog - ViewerPanel[{i}] 設定完了: {field_name}",
-                        "PoleFacility", Qgis.Info
-                    )
+                    
+                    # サムネイル設定
+                    if i < len(self._thumbnail_widgets):
+                        self._thumbnail_widgets[i].set_image(self._before_image_paths[i])
+                    
                 except Exception as e:
                     QgsMessageLog.logMessage(
                         f"PhotoManagementDialog - ViewerPanel[{i}] エラー: {str(e)}",
                         "PoleFacility", Qgis.Warning
                     )
             
-            # EditorPanel × 3 に写真をセット
+            # EditorPanel設定
             for i, (panel, field_name, source_field_name) in enumerate(
                 zip(self._editor_panels, self._after_fields, self._before_fields)
             ):
                 try:
-                    # 注: set_layer()は既に呼び出し済み
                     panel.set_photo(feature, field_name, source_field_name)
-                    QgsMessageLog.logMessage(
-                        f"PhotoManagementDialog - EditorPanel[{i}] 設定完了: {field_name} (source: {source_field_name})",
-                        "PoleFacility", Qgis.Info
-                    )
                 except Exception as e:
                     QgsMessageLog.logMessage(
                         f"PhotoManagementDialog - EditorPanel[{i}] エラー: {str(e)}",
                         "PoleFacility", Qgis.Warning
                     )
             
-            # タイトル更新
             self._update_title()
-            
-            QgsMessageLog.logMessage(
-                f"PhotoManagementDialog - 地物設定完了: feature_id={feature.id()}",
-                "PoleFacility", Qgis.Info
-            )
             
         except Exception as e:
             QgsMessageLog.logMessage(
@@ -377,26 +434,35 @@ class PhotoManagementDialog(QDialog):
                 "PoleFacility", Qgis.Critical
             )
     
-    def refresh(self):
-        """
-        表示を更新
+    def _resolve_path(self, relative_path: str) -> str:
+        """パス解決"""
+        if not relative_path or not self._config_manager:
+            return ""
         
-        現在の地物で再読み込み
-        """
+        import os
+        
+        if os.path.isabs(relative_path):
+            return relative_path
+        
+        photo_root = self._config_manager.get_photo_root_path()
+        if not photo_root:
+            return relative_path
+        
+        normalized_relative = relative_path.replace('\\', '/')
+        actual_path = os.path.join(photo_root, normalized_relative)
+        return os.path.normpath(actual_path)
+    
+    def refresh(self):
+        """表示を更新"""
         if self._feature:
             self.set_feature(self._feature)
     
     def _update_title(self):
-        """
-        ウィンドウタイトルを更新
-        
-        タイトル形式: "写真管理 - 設備番号: X"
-        """
+        """ウィンドウタイトルを更新"""
         if not self._feature:
             return
         
         try:
-            # 設備番号を取得
             equipment_number = self._feature["設備番号"] if "設備番号" in self._feature.fields().names() else ""
             
             if equipment_number:
@@ -404,62 +470,30 @@ class PhotoManagementDialog(QDialog):
             else:
                 self.setWindowTitle("写真管理")
         
-        except Exception as e:
-            QgsMessageLog.logMessage(
-                f"PhotoManagementDialog - タイトル更新エラー: {str(e)}",
-                "PoleFacility", Qgis.Warning
-            )
+        except Exception:
             self.setWindowTitle("写真管理")
     
     def _on_photo_saved(self, field_name: str, relative_path: str):
-        """
-        写真保存完了時のハンドラ
-        
-        Args:
-            field_name: フィールド名
-            relative_path: 保存された相対パス
-        
-        処理:
-            photo_saved シグナルを発行
-        """
-        QgsMessageLog.logMessage(
-            f"PhotoManagementDialog - 写真保存完了: {field_name} → {relative_path}",
-            "PoleFacility", Qgis.Info
-        )
-        
-        # 外部にシグナル発行
+        """写真保存完了時のハンドラ"""
         self.photo_saved.emit(field_name, relative_path)
     
     def closeEvent(self, event):
-        """
-        クローズイベント
-        
-        Args:
-            event: QCloseEvent
-        
-        処理:
-            closed シグナルを発行してから閉じる
-        """
-        QgsMessageLog.logMessage(
-            "PhotoManagementDialog - ダイアログを閉じます",
-            "PoleFacility", Qgis.Info
-        )
-        
+        """クローズイベント"""
         self.closed.emit()
         super().closeEvent(event)
     
     def moveEvent(self, event):
-        """ウィンドウ移動イベント（v1.9.1追加）"""
+        """ウィンドウ移動イベント"""
         super().moveEvent(event)
         self._schedule_save_position()
     
     def resizeEvent(self, event):
-        """ウィンドウリサイズイベント（v1.9.1追加）"""
+        """ウィンドウリサイズイベント"""
         super().resizeEvent(event)
         self._schedule_save_position()
     
     def _schedule_save_position(self):
-        """座標保存をスケジュール（v1.9.1追加）"""
+        """座標保存をスケジュール"""
         from PyQt5.QtCore import QTimer
         
         if self._save_timer is not None:
@@ -472,7 +506,7 @@ class PhotoManagementDialog(QDialog):
         self._save_timer.start(500)
     
     def _save_current_position(self):
-        """現在のウィンドウ位置・サイズを保存（v1.9.1追加）"""
+        """現在のウィンドウ位置・サイズを保存"""
         from PyQt5.QtWidgets import QApplication
         
         if self._config_manager is None:
@@ -490,29 +524,13 @@ class PhotoManagementDialog(QDialog):
             pass
     
     def get_viewer_panel(self, index: int) -> Optional[PhotoViewerPanel]:
-        """
-        指定インデックスのViewerPanelを取得
-        
-        Args:
-            index: インデックス（0-2）
-        
-        Returns:
-            PhotoViewerPanel: パネル、範囲外の場合は None
-        """
+        """指定インデックスのViewerPanelを取得"""
         if 0 <= index < len(self._viewer_panels):
             return self._viewer_panels[index]
         return None
     
     def get_editor_panel(self, index: int) -> Optional[PhotoEditorPanel]:
-        """
-        指定インデックスのEditorPanelを取得
-        
-        Args:
-            index: インデックス（0-2）
-        
-        Returns:
-            PhotoEditorPanel: パネル、範囲外の場合は None
-        """
+        """指定インデックスのEditorPanelを取得"""
         if 0 <= index < len(self._editor_panels):
             return self._editor_panels[index]
         return None
