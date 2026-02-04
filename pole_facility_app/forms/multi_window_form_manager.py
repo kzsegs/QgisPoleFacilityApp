@@ -420,12 +420,16 @@ class MultiWindowFormManager(QObject):
         
         Args:
             feature: 対象地物
+        
+        Note:
+            PhotoManagementDialogはset_feature(feature, layer)が必須。
         """
         if self.dialogs['basic'] is not None:
             self.dialogs['basic'].set_feature(feature)
         
         if self.dialogs['photo'] is not None:
-            self.dialogs['photo'].set_feature(feature)
+            # PhotoManagementDialogはlayerも必須
+            self.dialogs['photo'].set_feature(feature, self.current_layer)
         
         if self.dialogs['inspection'] is not None:
             self.dialogs['inspection'].set_feature(feature)
