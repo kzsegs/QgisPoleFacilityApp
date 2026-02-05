@@ -66,21 +66,33 @@ class HoverDetector(QWidget):
     
     def _get_mouse_position(self):
         """
-        マウス座標を元画像座標系に変換（高速化版）
+        マウス座標を元画像座標系に変換（viewport()対応版）
         
         Returns:
             QPointF: 元画像座標系のマウス位置、取得できない場合はNone
+        
+        座標変換フロー:
+            グローバル座標（画面全体のピクセル座標）
+              ↓ viewport().mapFromGlobal()
+            viewport座標（QGraphicsViewの描画領域内の座標）
+              ↓ mapToScene()
+            シーン座標（元画像のピクセル座標系）
+        
+        Note:
+            QGraphicsView.mapFromGlobal() ではなく、
+            viewport().mapFromGlobal() を使用することで、
+            スクロールバーやフレームのオフセットを正しく考慮
         """
         if not self._graphics_view:
             return None
         
         try:
-            # グローバル座標からビュー座標に変換
+            # グローバル座標からviewport座標に変換（修正）
             global_pos = QCursor.pos()
-            view_pos = self._graphics_view.mapFromGlobal(global_pos)
+            viewport_pos = self._graphics_view.viewport().mapFromGlobal(global_pos)
             
-            # ビュー座標からシーン座標（元画像座標系）に変換
-            scene_pos = self._graphics_view.mapToScene(view_pos)
+            # viewport座標からシーン座標（元画像座標系）に変換
+            scene_pos = self._graphics_view.mapToScene(viewport_pos)
             
             return scene_pos
             
